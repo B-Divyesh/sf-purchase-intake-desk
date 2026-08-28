@@ -1,0 +1,65 @@
+[
+  {
+    "id": "demo-entry-reset",
+    "claim": "The demo opens with a ready purchase order, and reset restores the original sample.",
+    "where": "landing sample action, demo banner, README",
+    "test": "npm run test:e2e -- --grep @claim:demo-entry-reset",
+    "sandbox": "fresh browser context at /?demo=1; alter NB-1047, reset, then assert all three original lines and quantities"
+  },
+  {
+    "id": "expected-vs-received",
+    "claim": "Compares each received count with the purchase order.",
+    "where": "landing facts, receive screen",
+    "test": "npm run test:e2e -- --grep @claim:expected-vs-received",
+    "sandbox": "fresh demo NB-1047; enter 120, 46, and 24 and assert matched, 2 short, and matched quantity outcomes"
+  },
+  {
+    "id": "exact-unit-conversion",
+    "claim": "Converts 4 cases of 12 into exactly 48 each.",
+    "where": "NB-1047 belt line and quantity detail",
+    "test": "npm run test:e2e -- --grep @claim:exact-unit-conversion",
+    "sandbox": "fresh demo NB-1047; assert 4 × 12 displays and computes as decimal 48 with no binary rounding residue"
+  },
+  {
+    "id": "partial-discrepancy",
+    "claim": "Records short and damaged items in one partial-delivery discrepancy.",
+    "where": "receive summary and discrepancy screen",
+    "test": "npm run test:e2e -- --grep @claim:partial-discrepancy",
+    "sandbox": "fresh demo NB-1047; receive 46 belts and mark one of 24 seals damaged; finalize and assert both facts in one case"
+  },
+  {
+    "id": "immutable-correction",
+    "claim": "A finalized receipt is corrected with a new event instead of rewriting its history.",
+    "where": "receipt timeline and correction action",
+    "test": "npm run test:e2e -- --grep @claim:immutable-correction",
+    "sandbox": "finalize demo receipt, record a correction, then assert original event and hash remain and a linked correction event is appended"
+  },
+  {
+    "id": "receipt-csv-export",
+    "claim": "Exports the finalized receipt as CSV.",
+    "where": "landing facts and receipt export action",
+    "test": "npm run test:e2e -- --grep @claim:receipt-csv-export",
+    "sandbox": "finalized demo receipt; download and parse CSV, assert versioned headers, three line rows, decimal values, and discrepancy fields"
+  },
+  {
+    "id": "offline-reload",
+    "claim": "Keeps demo counts through a network drop after the first visit.",
+    "where": "landing facts and connection strip",
+    "test": "npm run test:e2e -- --grep @claim:offline-reload",
+    "sandbox": "fresh context; load demo and wait for service worker, set browser offline, change counts, reload, and assert shell, sample, and changes remain"
+  },
+  {
+    "id": "demo-isolation",
+    "claim": "Demo changes stay in the demo sandbox and are not sent to an external service.",
+    "where": "demo banner, privacy page, README",
+    "test": "npm run test:e2e -- --grep @claim:demo-isolation",
+    "sandbox": "record all requests during full demo flow and assert same-origin only; inspect opened storage names and assert only intake-desk:demo:v1"
+  },
+  {
+    "id": "scanner-manual-fallback",
+    "claim": "Accepts a keyboard scanner code or a typed item code without camera access.",
+    "where": "receive scan field and compatibility note",
+    "test": "npm run test:e2e -- --grep @claim:scanner-manual-fallback",
+    "sandbox": "fresh demo NB-1047; deny camera, send a keyboard-wedge burst for BRG-6204, type BLT-A42 manually, and assert both lines receive focus"
+  }
+]
