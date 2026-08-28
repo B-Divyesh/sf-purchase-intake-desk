@@ -35,3 +35,29 @@ async fn health_reports_status_and_build_identity() {
         .as_str()
         .is_some_and(|sha| !sha.is_empty()));
 }
+
+#[tokio::test]
+async fn static_routes_rate_limit_by_first_forwarded_ip() {
+    let app = app("../dist");
+    let mut limited = None;
+    for _ in 0..48 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/robots.txt")
+                    .header("x-forwarded-for", "203.0.113.12, 10.0.0.8")
+                    .body(Body::empty())
+                    .expect("valid request"),
+            )
+            .await
+            .expect("static response");
+        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+            limited = Some(response);
+            break;
+        }
+    }
+
+    let response = limited.expect("burst must be rate limited");
+    assert!(response.headers().contains_key("retry-after"));
+}

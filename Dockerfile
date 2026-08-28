@@ -1,11 +1,14 @@
 FROM node:22-alpine AS web-builder
+ARG BUILD_SHA=dev
+ARG GIT_SHA=dev
+ARG SOURCE_COMMIT=dev
 WORKDIR /source
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY index.html svelte.config.js tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts ./
 COPY public ./public
 COPY src ./src
-RUN npm run build:web
+RUN BUILD_SHA="${BUILD_SHA:-${GIT_SHA:-${SOURCE_COMMIT:-dev}}}" npm run build:web
 
 FROM rust:1.98-bookworm AS api-builder
 ARG BUILD_SHA=dev

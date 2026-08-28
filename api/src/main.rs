@@ -36,7 +36,10 @@ async fn main() {
         .await
         .unwrap_or_else(|error| panic!("failed to bind {address}: {error}"));
 
-    axum::serve(listener, app(static_dir))
+    axum::serve(
+        listener,
+        app(static_dir).into_make_service_with_connect_info::<SocketAddr>(),
+    )
         .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("server stopped unexpectedly");
