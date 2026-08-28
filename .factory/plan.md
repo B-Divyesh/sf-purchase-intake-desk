@@ -1,6 +1,6 @@
 # Intake Desk venture plan
 
-Status: **PLANNED — no product milestone has shipped**
+Status: **M1 BUILT — awaiting independent review and polish**
 
 Product: `purchase-intake-desk` · Artifact: `web-with-backend`
 
@@ -546,7 +546,7 @@ immutability, offline clarity, accessibility, or claim tests.
 
 ### M1 — See and complete the dock job in a sandbox
 
-Status: **PLANNED**
+Status: **BUILT — awaiting review and polish**
 
 Goal: A visitor can understand Intake Desk and complete one realistic receipt
 with a discrepancy, offline, without an account or server write.

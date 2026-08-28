@@ -1,74 +1,74 @@
 # Intake Desk
 
-Intake Desk is planned for small receiving teams that check supplier
-deliveries against purchase orders without adopting a full ERP. It will record
-counts, evidence, partial deliveries, discrepancies, and portable CSV exports.
-
-This repository is currently a **planning and tooling scaffold**. The product
-workflow, demo, accounts, storage, and billing have not been built. M1 is
-specified in [`.factory/plan.md`](.factory/plan.md) and its testable claims are
-in [`.factory/claims.json`](.factory/claims.json).
+Intake Desk helps small receiving teams check supplier deliveries against a
+purchase order. The M1 release is a complete local sample: count a delivery,
+record shortages and damage, finalize an append-only receipt, add a correction,
+and export receipt CSV.
 
 Production URL: <https://purchase-intake-desk.sociobot.in>
 
-Demo URL from M1: <https://purchase-intake-desk.sociobot.in/?demo=1>
+One-click demo: <https://purchase-intake-desk.sociobot.in/?demo=1>
 
 ## Who it is for
 
-The intended customers are 10–100-person distributors, workshops, and small
-manufacturers. Receiving staff need a dependable record while a delivery is
-still at the dock. Operations and accounts staff need clear exceptions and an
-export they can use in existing tools.
+Intake Desk is for 10–100-person distributors, workshops, and manufacturers
+that receive daily supplier deliveries but do not need a full ERP.
 
-## Repository map
+## What M1 includes
 
-- `src/` — Svelte 5 planning shell and design-system starting points.
-- `api/` — Rust/axum health and static-serving scaffold. Product APIs begin in
-  M2.
-- `.factory/plan.md` — PRD, evidence, architecture, milestones, tests, and
-  risks.
-- `.factory/design.md` — dock-stamp constructivism visual contract.
-- `.factory/component-inventory.md` — 20 component contracts and states.
-- `.factory/claims.json` — claims the M1 builder must implement and prove.
-- `.factory/demo.md` — deterministic M1 sandbox and isolation contract.
+- A seeded West Yard purchase order, NB-1047, with three realistic lines.
+- Typed and keyboard-scanner item lookup with a camera-denied fallback.
+- Exact case-to-each quantity handling, shortage and damage classification.
+- Local finalization, hash-linked correction history, and receipt CSV export.
+- An isolated IndexedDB demo that works after a network drop.
+- Responsive day/night design, keyboard operation, and public legal pages.
 
-## Develop
+M1 is an evaluation sandbox. It does not include accounts, server-side customer
+records, supplier messages, or checkout. Those are deliberately M2/M3 work in
+[the venture plan](.factory/plan.md). The Dock plan will cost $149 USD per site
+each month when production accounts open.
+
+## Run locally
 
 Requirements: Node.js 22+, npm 10+, and stable Rust.
 
 ```sh
 npm ci
-npm run dev       # planning shell at http://localhost:5173
-npm run dev:api   # axum on PORT, default http://localhost:8080
+npm run dev
 ```
 
-Build the web app before starting axum if you want it to serve the static
-shell:
+Open <http://localhost:5173/?demo=1>. The first visit installs the offline
+shell. `Reset demo` deletes only `intake-desk:demo:v1` and restores the sample.
+
+Run the Rust container service against a production web build:
 
 ```sh
 npm run build:web
 npm run dev:api
 ```
 
+It listens on `PORT` or 8080 and exposes `/health`. Every non-health request is
+limited by client IP, using the first valid `X-Forwarded-For` address.
+
 ## Test and build
 
 ```sh
 npm run check
-npm test          # Vitest plus Rust tests
-npm run build     # web artifact in dist/ plus release API binary
+npm test
+npm run test:e2e
+npm run build
+cargo fmt --manifest-path api/Cargo.toml -- --check
+cargo clippy --manifest-path api/Cargo.toml --all-targets -- -D warnings
 ```
 
-`npm run test:e2e` is reserved for M1 claim tests. Playwright is pinned to
-1.58.2 to match the factory browsers; the planning scaffold intentionally has
-no product E2E tests yet.
-
-CI runs type checks, Rust formatting/clippy, unit/API tests, and both builds on
-pushes and pull requests to `main`.
+Playwright 1.58.2 runs every claim in Chromium at desktop and 390×844. Each
+test starts with a fresh browser context and the shipped sample. The build puts
+the web artifact in `dist/` and creates the release Rust binary.
 
 ## Container
 
-The multi-stage image builds the web shell and Rust server, runs non-root, and
-serves on `PORT` (default `8080`):
+The image builds without `.git`, runs as a non-root user, and starts with only
+`PORT` set.
 
 ```sh
 docker build --build-arg BUILD_SHA=local -t intake-desk .
@@ -76,17 +76,17 @@ docker run --rm -p 8080:8080 intake-desk
 curl http://localhost:8080/health
 ```
 
-The factory owns deployment, identity callback registration, persistent
-storage, secrets, DNS, and the Dodo-backed Sociobot subscription registration.
-Do not change those from this repository.
+The factory owns deployment, DNS, identity callback registration, durable
+storage, and the Dodo-backed Sociobot subscription registration. No secret is
+stored in this repository or sent by the M1 demo.
 
-## Privacy and billing direction
+## Project records
 
-The M1 demo will use a separate local browser database and make no external
-product-data requests. M2 will use the shared Sociobot Entra CIAM tenant and
-the Sociobot billing API; the app will never handle passwords or call Dodo
-directly. Full retention, export, deletion, `/privacy`, and `/terms` behavior is
-specified milestone by milestone in the plan.
+- [Milestone plan](.factory/plan.md)
+- [Design system](.factory/design.md)
+- [Claim tests](.factory/claims.json)
+- [Demo contract](.factory/demo.md)
+- [M1 handoff](.factory/handoff-m1.md)
 
 ## License
 

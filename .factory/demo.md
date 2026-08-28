@@ -1,11 +1,11 @@
 # Demo sandbox contract
 
-Status: planned for M1; the scaffold does not implement the demo yet.
+Status: implemented in M1 and verified in Chromium at desktop and 390×844.
 
 ## Entry and routing
 
 - Verification entry: `https://purchase-intake-desk.sociobot.in/?demo=1`.
-- Local entry after M1: `http://localhost:5173/?demo=1`.
+- Local entry: `http://localhost:5173/?demo=1`.
 - `/?demo=1` enters sample data immediately and canonicalizes to
   `/demo?demo=1`. `/demo` also enters demo mode.
 - A persistent banner says: “Demo — sample data, nothing is saved.” It offers
@@ -39,8 +39,8 @@ as an empty tutorial.
   demo cache/data, and returns to the demo inbox. It cannot clear production
   stores.
 - “Start for real” leaves demo, discards demo changes, and goes to the public
-  start/sign-in route. M1 explains that accounts are not built yet; M2 enables
-  sign-in. Demo records are never silently copied into production.
+  public pricing section. M1 explains that accounts are not built yet; M2
+  enables sign-in. Demo records are never silently copied into production.
 
 ## Offline verification
 

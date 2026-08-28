@@ -242,7 +242,7 @@ p { max-width: 68ch; }
 .success { color: var(--color-success); }
 .danger { color: var(--color-danger); }
 
-.landing-section { padding-block: var(--space-12); border-top: var(--rule-working) solid var(--color-ink); content-visibility: auto; contain-intrinsic-size: 500px; }
+.landing-section { padding-block: var(--space-12); border-top: var(--rule-working) solid var(--color-ink); }
 .landing-section > h2 { max-width: 18ch; margin-block: var(--space-3) var(--space-4); }
 .section-index { color: var(--color-safety); }
 .count-strip { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: var(--space-6); border-block: var(--rule-working) solid var(--color-ink); background: var(--color-surface); }

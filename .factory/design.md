@@ -2,7 +2,7 @@
 
 Direction: **dock-stamp constructivism**
 
-Status: design contract for M1; no product screens exist yet
+Status: implemented for M1
 
 Last updated: 2026-08-28
 
@@ -321,14 +321,15 @@ an image.
 
 | Asset | Source / license | Status |
 | --- | --- | --- |
-| `public/favicon.svg` | Hand-authored geometric dock/receipt mark by Param Factory for this repository; covered by repository MIT license. | Scaffolded 2026-08-28 |
-| Header wordmark | Live text plus the owned favicon geometry; no image wordmark. | Planned M1 |
-| Hero/live art | Real HTML demo manifest with optional hand-authored ruled SVG fragments; no raster hero. | Planned M1 |
-| Open Graph 1200×630 | Compose from the owned mark, manifest geometry, and token palette with a repository script; no required text-in-image. | Planned M1 |
+| `public/favicon.svg` | Hand-authored geometric dock/receipt mark by Param Factory for this repository; covered by repository MIT license. | Shipped 2026-08-28 |
+| Header wordmark | Live text plus the owned favicon geometry; no image wordmark. | Shipped M1 |
+| Hero/live art | Real HTML demo manifest plus a hand-authored SVG evidence sketch; no raster hero. | Shipped M1 |
+| `public/og-image.svg` | Hand-authored 1200×630 composition from the owned mark, manifest geometry, and token palette. | Shipped M1 |
+| `public/apple-touch-icon.svg` / `.png` | Hand-authored and locally rasterized from the owned receipt geometry. | Shipped M1 |
 | Product illustrations/icons | Small hand-authored SVG using 2 px square strokes; disclose author/date here as added. Prefer words when an icon is not universal. | Planned per milestone |
 | Product screenshots | Captured from the deterministic demo; repository/product rights. | Planned M1+ |
-| Barlow Condensed | SIL Open Font License 1.1; canonical source and exact version to be recorded by M1. | Not yet committed |
-| Atkinson Hyperlegible Next | SIL Open Font License 1.1; canonical source and exact version to be recorded by M1. | Not yet committed |
+| Barlow Condensed Semibold WOFF2 | SIL Open Font License 1.1; `jpt/barlow` commit `dc2940e2e04ef4ec96c07e23e0f02aefbddd343b`, path `fonts/woff2/BarlowCondensed-SemiBold.woff2`; license retained in `public/fonts/OFL-Barlow.txt`. | Shipped M1 |
+| Atkinson Hyperlegible Next Regular/Bold WOFF2 | SIL Open Font License 1.1; `googlefonts/atkinson-hyperlegible-next` commit `7925f50f649b3813257faf2f4c0b381011f434f1`, paths under `fonts/webfonts/`; license retained in `public/fonts/OFL-Atkinson-Hyperlegible-Next.txt`. | Shipped M1 |
 
 No generative model has been used for a shipped visual asset in this planning
 work order. If a future builder generates one, add the tool/model, full prompt,

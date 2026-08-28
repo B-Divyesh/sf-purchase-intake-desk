@@ -1,6 +1,7 @@
 {
   "slug": "purchase-intake-desk",
   "title": "Intake Desk",
+  "summary": "Check supplier deliveries against purchase orders and record shortages or damage at the receiving desk.",
   "territory": "utilities",
   "user": "10–100-person distributors, workshops, and small manufacturers that receive supplier deliveries against purchase orders but are not ready to implement an ERP.",
   "evidence": [

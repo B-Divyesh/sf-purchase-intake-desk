@@ -1,6 +1,6 @@
 {
   "name": "purchase-intake-desk",
-  "version": "0.0.0-planning",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "engines": {
