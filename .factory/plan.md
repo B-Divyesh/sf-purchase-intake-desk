@@ -546,7 +546,7 @@ immutability, offline clarity, accessibility, or claim tests.
 
 ### M1 — See and complete the dock job in a sandbox
 
-Status: **BUILT — awaiting review and polish**
+Status: **BUILT — repair 1 deployed and verified**
 
 Goal: A visitor can understand Intake Desk and complete one realistic receipt
 with a discrepancy, offline, without an account or server write.
@@ -632,7 +632,7 @@ Definition of done:
 
 ### M2 — Sign in, pay, and use a real site
 
-Status: **PLANNED — blocked on M1 PASS**
+Status: **PLANNED — M1 passed; not started**
 
 Goal: An owner can sign in, attach an active Dock subscription, create one site,
 and repeat the M1 job against durable tenant-isolated records.
