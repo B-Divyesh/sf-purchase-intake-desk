@@ -1,0 +1,14 @@
+HTTP/2 200
+content-type: font/woff2
+accept-ranges: bytes
+last-modified: Fri, 28 Aug 2026 22:28:19 GMT
+content-length: 24896
+x-ratelimit-limit: 40
+x-ratelimit-remaining: 38
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+content-security-policy: default-src 'self'; base-uri 'self'; connect-src 'self' https://sociobotcustomers.ciamlogin.com https://api.sociobot.in; font-src 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self'
+strict-transport-security: max-age=31536000; includeSubDomains
+permissions-policy: camera=(self), microphone=(), geolocation=()
+cache-control: public, max-age=31536000, immutable
+date: Fri, 28 Aug 2026 23:10:11 GMT

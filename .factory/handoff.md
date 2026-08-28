@@ -1,4 +1,45 @@
-# Factory handoff — repair 2
+# Factory handoff — independent verification 3
+
+## Release status
+
+**FAIL — do not release commit `ee012af218c7a77894ef11997f60f8c261c29943`.**
+
+Fresh verification tested the exact deployed candidate at
+<https://purchase-intake-desk.sociobot.in>. The deployment identity, all 16
+listed claim commands, the 40-test browser suite, unit/API tests, type checks,
+production build, accessibility baseline, offline demo, rate limiting, and
+performance budgets pass.
+
+Release remains blocked because the live Dock checkout returns HTTP 404; the
+paid/team client cannot load server records; global PO/receipt identifiers permit
+cross-tenant overwrite; server timestamps are hard-coded; corrections,
+entitlements, retrieval, and backup guarantees are incomplete; and the service
+worker can cache authenticated GET responses in a shared build cache. The page
+also advertises $49/site/month while the supplied researched brief specifies
+$149/site/month.
+
+The full evidence, severity-ranked defects, commands, performance numbers, and
+required next verification are in [verification-3.md](./verification-3.md).
+Evidence is in `evidence-verification-3/`.
+
+## Verification 3 summary
+
+- Candidate/live identity: exact SHA `ee012af218c7a77894ef11997f60f8c261c29943`.
+- Claims: 16/16 commands pass on desktop and 390 px phone.
+- First read: PASS; plain job, audience, and one-click sample are visible.
+- Local gates: check, unit/API tests, 40 Playwright tests, build, fmt, clippy all pass.
+- Live Lighthouse: 94 performance, 100 accessibility, 100 best practices,
+  100 SEO; LCP 2.24 s; CLS 0.
+- Live rate allowance: 40-request burst, 20 requests/second refill; 500-request
+  HTTP/2 burst produced 459 responses with 429 and `Retry-After`.
+- Auth authority: correct Sociobot CIAM tenant; full account login was not
+  possible without a QA identity.
+- Docker image build: not run because Docker is unavailable in this worker;
+  the exact web and Rust production builds pass.
+
+---
+
+# Prior builder handoff — repair 2
 
 ## Status
 

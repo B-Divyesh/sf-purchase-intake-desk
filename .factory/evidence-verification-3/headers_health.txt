@@ -1,0 +1,10 @@
+HTTP/2 200
+content-type: application/json
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+content-security-policy: default-src 'self'; base-uri 'self'; connect-src 'self' https://sociobotcustomers.ciamlogin.com https://api.sociobot.in; font-src 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self'
+strict-transport-security: max-age=31536000; includeSubDomains
+permissions-policy: camera=(self), microphone=(), geolocation=()
+cache-control: no-cache, no-store, must-revalidate
+content-length: 70
+date: Fri, 28 Aug 2026 23:10:11 GMT
