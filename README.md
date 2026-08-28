@@ -17,15 +17,17 @@ that receive daily supplier deliveries but do not need a full ERP.
 
 ## What it includes
 
-- Import a real purchase-order CSV into a separate local workspace.
+- Keep an inbox of imported purchase orders; later imports do not replace earlier receipts.
 - Attach JPEG, PNG, WebP, or PDF evidence to its receipt.
 - Compare expected and received quantities with exact decimal math.
 - Finalize a hash-linked receipt, add corrections, and export CSV.
 - Try the full flow with an isolated West Yard sample.
 
-The current pilot stores real workspace data on one browser only. It has no
-account sync or supplier email. The planned Dock service costs $149 USD per
-site each month after shared accounts open.
+The no-account workspace is a local offline cache. Dock uses Sociobot Entra
+sign-in and server-owned, tenant-scoped SQLite storage for the team inbox,
+receipt audit events, evidence metadata, and backup snapshot. Dock costs **$49
+USD per site each month** through Sociobot checkout. A lapsed site remains
+read-only and can export records.
 
 ## Run locally
 
@@ -47,7 +49,10 @@ npm run build:web
 npm run dev:api
 ```
 
-It listens on `PORT` or 8080 and exposes `/health`.
+It listens on `PORT` or 8080 and exposes `/health` and `/ready`. It boots with
+only `PORT`; it creates `/data/intake-desk.sqlite3` (or `./data` locally), WAL
+storage, object retention, and a `backup-latest.sqlite3` snapshot after each
+receipt finalization. Set `DATA_DIR` only to override the durable mount.
 
 ## Test and build
 

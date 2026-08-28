@@ -15,6 +15,7 @@
   let pathname = window.location.pathname;
   let meta = routeMeta(pathname);
   let state: DemoState | null = null;
+  let workspaceOrders: DemoState[] = [];
   let loading = false;
   let busy = false;
   let notice = '';
@@ -25,6 +26,17 @@
   let finalizeDialog: HTMLDialogElement;
   let correctionDialog: HTMLDialogElement;
   let resetDialog: HTMLDialogElement;
+  let cameraDialog: HTMLDialogElement;
+  let cameraVideo: HTMLVideoElement;
+  let cameraStream: MediaStream | null = null;
+  let scanning = false;
+  let cameraMessage = '';
+  let cameraTimer: number | undefined;
+  let licenseToken = '';
+  let billingMessage = '';
+  let signedInName = '';
+  let accessToken = '';
+  let activeSiteId = '';
   let correctionReason = '';
   let importError = '';
   let attachmentCaption = '';
@@ -52,6 +64,7 @@
       history.replaceState({}, '', '/404');
       pathname = '/404';
     }
+    if (pathname === '/auth/callback') void completeSignIn();
     if (pathname === '/demo' || pathname.startsWith('/demo/')) void loadDemo();
     if (pathname === '/app' || pathname.startsWith('/app/')) void loadWorkspace();
 
@@ -73,6 +86,28 @@
       window.removeEventListener('offline', offline);
     };
   });
+
+  async function completeSignIn() {
+    try {
+      const { finishSignIn } = await import('./lib/auth/ciam');
+      const token = await finishSignIn();
+      if (!token) { error = 'Sign-in did not return a token. Try again.'; return; }
+      const response = await fetch('/api/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error('The receiving site could not be opened.');
+      const member = await response.json() as { name: string; site_id: string };
+      signedInName = member.name;
+      accessToken = token;
+      activeSiteId = member.site_id;
+      for (const order of await workspaceRepository.list()) void syncDockRecord(order);
+      notice = `Signed in as ${member.name}. Your Dock site is ready.`;
+      history.replaceState({}, '', '/app'); pathname = '/app'; void loadWorkspace();
+    } catch { error = 'Sign-in could not finish. Check the registered callback address and try again.'; }
+  }
+
+  async function signIn() {
+    const { startSignIn } = await import('./lib/auth/ciam');
+    await startSignIn();
+  }
 
   async function registerOfflineShell() {
     if (!('serviceWorker' in navigator)) return;
@@ -104,7 +139,7 @@
     error = '';
     try {
       state = await demoRepository.load();
-      chainVerified = state.events.length ? await verifyEventChain(state.events) : true;
+      chainVerified = state?.events.length ? await verifyEventChain(state.events) : true;
     } catch {
       error = 'The sample could not open on this device. Allow local storage, then retry.';
     } finally {
@@ -113,18 +148,23 @@
   }
 
   async function loadWorkspace() {
-    if (state?.source === 'csv') return;
+    const purchaseOrderId = pathname.match(/^\/app\/(?:purchase-orders|receive)\/([^/]+)/)?.[1]
+      ?? pathname.match(/^\/app\/(?:receipts|discrepancies)\/([^/]+)/)?.[1];
+    if (state?.source === 'csv' && (!purchaseOrderId || state.purchaseOrderId === purchaseOrderId || state.receiptId === purchaseOrderId || state.discrepancyId === purchaseOrderId)) return;
     state = null;
     loading = true;
     error = '';
     try {
-      state = await workspaceRepository.load();
-      if (!state) {
+      workspaceOrders = await workspaceRepository.list();
+      state = purchaseOrderId
+        ? await workspaceRepository.load(workspaceOrders.find((order) => order.purchaseOrderId === purchaseOrderId || order.receiptId === purchaseOrderId || order.discrepancyId === purchaseOrderId)?.purchaseOrderId)
+        : await workspaceRepository.load();
+      if (!state && pathname !== '/app') {
         history.replaceState({}, '', '/start');
         pathname = '/start';
         return;
       }
-      chainVerified = state.events.length ? await verifyEventChain(state.events) : true;
+      chainVerified = state?.events.length ? await verifyEventChain(state.events) : true;
     } catch {
       error = 'Your workspace could not open on this device. Allow local storage, then retry.';
     } finally { loading = false; }
@@ -153,12 +193,30 @@
     state = next;
     try {
       if (isDemo) await demoRepository.save(next);
-      else await workspaceRepository.save(next);
+      else {
+        await workspaceRepository.save(next);
+        workspaceOrders = await workspaceRepository.list();
+        void syncDockRecord(next);
+      }
       notice = message;
       error = '';
     } catch {
       error = 'This change was not saved. Free device storage, then try again.';
     }
+  }
+
+  async function syncDockRecord(next: DemoState) {
+    if (!accessToken || !activeSiteId || next.source !== 'csv') return;
+    try {
+      const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+      await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/purchase-orders`, { method: 'POST', headers, body: JSON.stringify({ purchase_order_id: next.purchaseOrderId, po_number: next.poNumber, supplier: next.supplier, site: next.site, payload: next }) });
+      await fetch('/api/v1/receipts', { method: 'POST', headers, body: JSON.stringify({ purchase_order_id: next.purchaseOrderId, receipt_id: next.receiptId, payload: next }) });
+      for (const attachment of next.attachments ?? []) {
+        const dataBase64 = attachment.dataUrl.split(',', 2)[1];
+        if (dataBase64) await fetch(`/api/v1/receipts/${encodeURIComponent(next.receiptId)}/attachments`, { method: 'POST', headers, body: JSON.stringify({ name: attachment.name, media_type: attachment.mediaType, data_base64: dataBase64 }) });
+      }
+      if (next.status === 'finalized') await fetch(`/api/v1/receipts/${encodeURIComponent(next.receiptId)}/finalize`, { method: 'POST', headers });
+    } catch { notice = 'Saved on this device. Server sync will retry after you return online.'; }
   }
 
   function updateLine(lineId: string, patch: Partial<PurchaseOrderLine>) {
@@ -189,6 +247,35 @@
     scanCode = '';
   }
 
+  function stopCamera() {
+    if (cameraTimer) window.clearTimeout(cameraTimer);
+    cameraTimer = undefined;
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+    scanning = false;
+  }
+
+  async function detectCameraCode() {
+    const Detector = (window as Window & { BarcodeDetector?: new (options: { formats: string[] }) => { detect(source: ImageBitmapSource): Promise<Array<{ rawValue: string }>> } }).BarcodeDetector;
+    if (!Detector || !cameraVideo || !scanning) return;
+    try {
+      const results = await new Detector({ formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e'] }).detect(cameraVideo);
+      const code = results[0]?.rawValue?.trim();
+      if (code) {
+        scanCode = code;
+        scan(new SubmitEvent('submit'));
+        cameraMessage = `${code} scanned. The matching count is ready.`;
+        notice = cameraMessage;
+        stopCamera();
+        cameraDialog.close();
+        await tick();
+        document.getElementById(`received-${state?.lines.find((line) => line.code === code)?.id ?? ''}`)?.focus();
+        return;
+      }
+    } catch { /* A frame may not be readable while the video starts. */ }
+    if (scanning) cameraTimer = window.setTimeout(detectCameraCode, 180);
+  }
+
   async function tryCamera() {
     error = '';
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -196,14 +283,35 @@
       document.getElementById('scan-code')?.focus();
       return;
     }
+    const Detector = (window as Window & { BarcodeDetector?: unknown }).BarcodeDetector;
+    if (!Detector) {
+      notice = 'This browser cannot decode camera codes. Use a keyboard scanner or type the item code.';
+      document.getElementById('scan-code')?.focus();
+      return;
+    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      stream.getTracks().forEach((track) => track.stop());
-      notice = 'Camera access works. This demo uses typed or keyboard scanner codes.';
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      cameraMessage = 'Point the camera at a QR or barcode.';
+      cameraDialog.showModal();
+      await tick();
+      cameraVideo.srcObject = cameraStream;
+      try { await cameraVideo.play(); } catch { /* Decoder can still read the first available frame. */ }
+      scanning = true;
+      void detectCameraCode();
     } catch {
       notice = 'Camera access was not allowed. Type the item code instead.';
       document.getElementById('scan-code')?.focus();
     }
+  }
+
+  async function restoreLicense(event: SubmitEvent) {
+    event.preventDefault();
+    if (!licenseToken.trim()) { billingMessage = 'Paste the license token from checkout.'; return; }
+    localStorage.setItem('sb_license:purchase-intake-desk', licenseToken.trim());
+    if (accessToken) {
+      const response = await fetch('/api/v1/billing/attach', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ license: licenseToken.trim() }) });
+      billingMessage = response.ok ? 'License attached to your site and queued for verification.' : 'License is saved on this device. Sign in again to attach it to your site.';
+    } else billingMessage = 'License saved on this device. Sign in to attach it to your site.';
   }
 
   function openDialog(dialog: HTMLDialogElement, trigger: EventTarget | null) {
@@ -316,6 +424,8 @@
     try {
       const imported = importPurchaseOrderCsv(await file.text());
       await workspaceRepository.save(imported);
+      workspaceOrders = await workspaceRepository.list();
+      void syncDockRecord(imported);
       state = imported;
       importError = '';
       notice = `${imported.poNumber} imported with ${imported.lines.length} lines.`;
@@ -389,6 +499,7 @@
     <a href="/demo" aria-current={isDemo ? 'page' : undefined} onclick={(event) => navigate(event, '/demo')}>Demo</a>
     <a href="/start" aria-current={pathname === '/start' || isWorkspace ? 'page' : undefined} onclick={(event) => navigate(event, '/start')}>Import PO</a>
     <a href="/privacy" aria-current={pathname === '/privacy' ? 'page' : undefined} onclick={(event) => navigate(event, '/privacy')}>Privacy</a>
+    {#if signedInName}<span class="member-name">{signedInName}</span>{:else}<button class="nav-button" type="button" onclick={signIn}>Sign in</button>{/if}
   </nav>
 </header>
 
@@ -409,7 +520,7 @@
         <h1 id="page-title" tabindex="-1">Check deliveries against the purchase order.</h1>
         <p class="lead">For small receiving teams that need a clear record before the supplier van leaves.</p>
         <div class="hero-action"><a class="button primary" href="/demo" onclick={(event) => navigate(event, '/demo')}>Try it with sample data</a><span>Opens one ready PO. No account.</span><a class="button secondary" href="/start" onclick={(event) => navigate(event, '/start')}>Import your PO</a></div>
-        <ul class="plain-facts" aria-label="Product facts"><li>Keeps counts through a network drop.</li><li>Exports receipt CSV.</li><li>Dock plan: $149 per site each month.</li></ul>
+        <ul class="plain-facts" aria-label="Product facts"><li>Keeps counts through a network drop.</li><li>Exports receipt CSV.</li><li>Dock plan: $49 per site each month.</li></ul>
       </div>
       <aside class="manifest-preview" aria-labelledby="preview-title">
         <div class="manifest-header"><span>WEST YARD</span><span>NB-1047</span></div>
@@ -438,8 +549,8 @@
     </section>
 
     <section id="pricing" class="landing-section pricing" aria-labelledby="pricing-title">
-      <div><div class="section-index">05 / DOCK PLAN</div><h2 id="pricing-title">One receiving site</h2><p>Shared site storage and staff access are planned for Dock.</p></div>
-      <div class="price"><strong>$149</strong><span>USD per site each month</span><p>The current single-device workspace is free during the pilot.</p></div>
+      <div><div class="section-index">05 / DOCK PLAN</div><h2 id="pricing-title">One receiving site</h2><p>Dock keeps a team inbox, receipts, evidence, and audit history on the server.</p></div>
+      <div class="price"><strong>$49</strong><span>USD per site each month</span><p>Recurring subscription. Sociobot is the merchant of record.</p><a class="button primary" href="https://api.sociobot.in/api/v1/products/purchase-intake-desk/checkout?plan=dock-monthly">Start Dock checkout <span class="visually-hidden">(opens Sociobot checkout)</span></a><form class="license-restore" onsubmit={restoreLicense}><label for="license-token">Restore a purchase</label><input id="license-token" bind:value={licenseToken} autocomplete="off" /><button class="text-button" type="submit">Save license</button>{#if billingMessage}<span role="status">{billingMessage}</span>{/if}</form></div>
     </section>
   {:else if pathname === '/start'}
     <section class="app-heading" aria-labelledby="page-title"><div class="route-mark">WORKSPACE / IMPORT</div><h1 id="page-title" tabindex="-1">Import a purchase order.</h1><p class="lead">Use your supplier CSV to start a real receipt on this device.</p></section>
@@ -463,12 +574,14 @@
         <section class="app-heading" aria-labelledby="page-title"><div class="route-mark">{state.site.toUpperCase()} / INBOX</div><h1 id="page-title" tabindex="-1">Find the delivery.</h1><p class="lead">Scan the packing list or search the supplier and purchase order.</p></section>
         <section class="search-sheet" aria-label="Purchase order search"><label for="po-search">Purchase order or supplier</label><input id="po-search" type="search" bind:value={search} placeholder="Try NB-1047" /></section>
         <section aria-labelledby="due-title">
-          <div class="section-heading"><h2 id="due-title">Due today</h2><span>1 purchase order</span></div>
-          {#if filtered}
-            <a class="po-row" href="{deskBase}/purchase-orders/{state.purchaseOrderId}" onclick={(event) => navigate(event, `${deskBase}/purchase-orders/${state!.purchaseOrderId}`)}>
-              <div><span class="eyebrow">{state.poNumber}</span><strong>{state.supplier}</strong></div>
-              <dl><div><dt>Lines</dt><dd>3</dd></div><div><dt>List</dt><dd>{state.packingList}</dd></div><div><dt>State</dt><dd>{state.status === 'finalized' ? 'Received' : 'Due'}</dd></div></dl><span class="row-action">Review <span aria-hidden="true">→</span></span>
-            </a>
+          <div class="section-heading"><h2 id="due-title">Due today</h2><span>{isWorkspace ? workspaceOrders.length : 1} purchase order{(isWorkspace ? workspaceOrders.length : 1) === 1 ? '' : 's'}</span></div>
+          {#if isWorkspace ? workspaceOrders.length : filtered}
+            {#each (isWorkspace ? workspaceOrders : [state]) as order}
+              <a class="po-row" href="{deskBase}/purchase-orders/{order.purchaseOrderId}" onclick={(event) => navigate(event, `${deskBase}/purchase-orders/${order.purchaseOrderId}`)}>
+                <div><span class="eyebrow">{order.poNumber}</span><strong>{order.supplier}</strong></div>
+                <dl><div><dt>Lines</dt><dd>{order.lines.length}</dd></div><div><dt>List</dt><dd>{order.packingList}</dd></div><div><dt>State</dt><dd>{order.status === 'finalized' ? 'Received' : 'Due'}</dd></div></dl><span class="row-action">Review <span aria-hidden="true">→</span></span>
+              </a>
+            {/each}
           {:else}
             <div class="state-panel compact"><h3>No matching purchase orders</h3><p>Clear the search to see NB-1047.</p><button class="button secondary" onclick={() => search = ''}>Clear search</button></div>
           {/if}
@@ -487,7 +600,7 @@
         <section class="scan-sheet" aria-labelledby="scan-title">
           <div><h2 id="scan-title">Find an item</h2><p>Use a keyboard scanner or type the code.</p></div>
           <form onsubmit={scan}><label for="scan-code">Item code</label><div class="field-action"><input id="scan-code" autocomplete="off" bind:value={scanCode} placeholder="BRG-6204" /><button class="button secondary" type="submit">Find item</button></div></form>
-          <button class="text-button" type="button" onclick={tryCamera}>Check camera fallback</button>
+          <button class="text-button" type="button" onclick={tryCamera}>Scan with phone camera</button>
         </section>
         <section aria-labelledby="count-title">
           <div class="section-heading"><h2 id="count-title">Received counts</h2><span>{state.lines.length} lines · quantities in each</span></div>
@@ -529,10 +642,12 @@
         <section class="state-panel" aria-labelledby="page-title"><div class="route-mark">RECORD / 404</div><h1 id="page-title" tabindex="-1">This receipt is not here.</h1><p>Return to the purchase-order inbox.</p><a class="button primary" href={deskBase} onclick={(event) => navigate(event, deskBase)}>Open the inbox</a></section>
       {/if}
     {/if}
+  {:else if pathname === '/auth/callback'}
+    <section class="state-panel" aria-labelledby="page-title"><h1 id="page-title" tabindex="-1">Signing you in.</h1><p>Opening your receiving site…</p></section>
   {:else if pathname === '/privacy'}
-    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / PRIVACY</div><h1 id="page-title" tabindex="-1">Your receiving data stays here.</h1><p class="lead">The demo and workspace store data only in this browser. They do not send receiving data to another service.</p><h2>What this browser stores</h2><p>The demo uses <code>intake-desk:demo:v1</code>. The real workspace uses <code>intake-desk:workspace:v1</code> for imported POs, counts, attachments, and receipt history.</p><h2>What leaves this device</h2><p>The app loads same-origin files. It has no analytics, advertising, account, billing, email, or AI request.</p><h2>Your control</h2><p>Clearing this site's browser data removes the workspace. Export finalized receipts before clearing it.</p><p>Questions: <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p></article>
+    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / PRIVACY</div><h1 id="page-title" tabindex="-1">Know where receiving data is stored.</h1><p class="lead">The demo stays in this browser. Signed-in Dock sites retain purchase orders, receipts, audit events, and evidence on the Intake Desk server.</p><h2>What this browser stores</h2><p>The demo uses <code>intake-desk:demo:v1</code>. The offline workspace cache uses <code>intake-desk:workspace:v1</code>.</p><h2>What Dock stores</h2><p>Dock stores tenant-scoped receipt records in a server database and evidence files in its retained object store. It keeps a backup snapshot after finalization. Intake Desk uses your Entra object ID, not your email address, as the account key.</p><h2>What leaves this device</h2><p>Demo actions stay local. When you sign in, real receiving records go to this same-origin service. Checkout and license verification use Sociobot only when you choose those actions. There is no analytics, advertising, or AI request.</p><h2>Your control</h2><p>Clearing browser data removes only the cache. Export records before deleting a Dock site. Contact us for account deletion or retention questions.</p><p>Questions: <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p></article>
   {:else if pathname === '/terms'}
-    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / TERMS</div><h1 id="page-title" tabindex="-1">Terms for Intake Desk.</h1><p class="lead">Use the local workspace to record supplier receipts you are authorized to handle.</p><h2>Local workspace</h2><p>The workspace is provided during the pilot without an account or subscription. It does not sync between devices.</p><h2>Your records</h2><p>You are responsible for checking imported values, attachments, and exported records before relying on them.</p><h2>Sample use</h2><p>Reset removes demo changes and restores NB-1047. It never removes your separate workspace.</p><p>Questions: <a href="mailto:support@sociobot.in">support@sociobot.in</a>.</p></article>
+    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / TERMS</div><h1 id="page-title" tabindex="-1">Terms for Intake Desk.</h1><p class="lead">Use Intake Desk only for supplier records you are authorized to handle.</p><h2>Dock subscription</h2><p>Dock is $49 USD per site each month. Sociobot is the merchant of record. A canceled or revoked subscription becomes read-only; export remains available.</p><h2>Your records</h2><p>You are responsible for checking imported values, attachments, and exported records before relying on them.</p><h2>Sample use</h2><p>Reset removes demo changes and restores NB-1047. It never removes your separate workspace.</p><p>Questions: <a href="mailto:support@sociobot.in">support@sociobot.in</a>.</p></article>
   {:else}
     <section class="state-panel not-found" aria-labelledby="page-title"><div class="route-mark">ROUTE / 404</div><h1 id="page-title" tabindex="-1">This page missed the dock.</h1><p>The address does not match an Intake Desk page.</p><div class="sheet-actions"><a class="button primary" href="/" onclick={(event) => navigate(event, '/')}>Return home</a><a href="/demo" onclick={(event) => navigate(event, '/demo')}>Open the sample</a></div></section>
   {/if}
@@ -554,4 +669,10 @@
 
 <dialog bind:this={resetDialog} onclose={() => lastDialogTrigger?.focus()} aria-labelledby="reset-dialog-title">
   <form method="dialog" onsubmit={(event) => { event.preventDefault(); void resetDemo(); }}><div class="dialog-mark">RESET SAMPLE</div><h2 id="reset-dialog-title">Reset NB-1047?</h2><p>This discards all demo changes on this device and restores the three original lines.</p><div class="dialog-actions"><button class="button secondary" type="button" onclick={() => closeDialog(resetDialog)}>Keep changes</button><button class="button primary" type="submit" disabled={busy}>{busy ? 'Resetting…' : 'Reset demo'}</button></div></form>
+</dialog>
+
+<dialog bind:this={cameraDialog} onclose={stopCamera} aria-labelledby="camera-dialog-title">
+  <div class="dialog-mark">PHONE SCANNER</div><h2 id="camera-dialog-title">Use phone camera</h2><p>{cameraMessage}</p>
+  <video bind:this={cameraVideo} playsinline muted aria-label="Live camera preview for barcode scanning"></video>
+  <div class="dialog-actions"><button class="button secondary" type="button" onclick={() => { stopCamera(); cameraDialog.close(); document.getElementById('scan-code')?.focus(); }}>Use typed code</button></div>
 </dialog>

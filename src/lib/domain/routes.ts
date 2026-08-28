@@ -20,6 +20,10 @@ export function routeMeta(pathname: string): RouteMeta {
     title: 'Import a purchase order — Intake Desk',
     description: 'Import a supplier purchase-order CSV and start a real receipt in a local workspace.',
   };
+  if (pathname === '/auth/callback') return {
+    title: 'Signing in — Intake Desk',
+    description: 'Complete Sociobot Entra sign-in for your Intake Desk site.',
+  };
   if (pathname.startsWith('/app/discrepancies/')) return {
     title: 'Discrepancy — Intake Desk',
     description: 'Review shortages, extra items, damage, and receipt evidence.',

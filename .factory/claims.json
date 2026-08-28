@@ -89,5 +89,26 @@
     "where": "landing, import workspace, evidence tray, README",
     "test": "npm run test:e2e -- --grep @claim:real-po-workspace",
     "sandbox": "fresh browser; import a customer CSV, verify exact case conversion, attach evidence, finalize, and assert only the separate workspace database and same-origin traffic"
+  },
+  {
+    "id": "multi-po-retention",
+    "claim": "Importing another purchase order keeps earlier finalized receipts available.",
+    "where": "real workspace purchase-order inbox and receipt history",
+    "test": "npm run test:e2e -- --grep @claim:multi-po-retention",
+    "sandbox": "fresh workspace; import and finalize PO-220, import PO-221, open the inbox, and open the retained PO-220 receipt"
+  },
+  {
+    "id": "dock-price-checkout",
+    "claim": "Dock costs $49 USD per site each month and starts at Sociobot checkout.",
+    "where": "landing Dock plan and purchase restore form",
+    "test": "npm run test:e2e -- --grep @claim:dock-price-checkout",
+    "sandbox": "fresh landing page; assert $49 recurring price, exact Sociobot checkout URL, and local license restore message"
+  },
+  {
+    "id": "phone-qr-scanning",
+    "claim": "Scans a supported QR or barcode from a phone camera into the matching receipt line.",
+    "where": "receive screen phone camera scanner",
+    "test": "npm run test:e2e -- --grep @claim:phone-qr-scanning",
+    "sandbox": "fresh demo with a recorded BarcodeDetector/camera fixture; decode BRG-6204 and assert the matching count receives focus"
   }
 ]

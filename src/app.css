@@ -367,8 +367,12 @@ dialog { width: min(34rem, calc(100vw - 2rem)); padding: 0; border: var(--rule-w
 dialog::backdrop { background: rgb(17 25 28 / 70%); }
 dialog form { padding: var(--space-6); }
 dialog h2 { margin-block: var(--space-4); }
+dialog > video { display: block; width: calc(100% - 2 * var(--space-6)); max-height: 55vh; margin: var(--space-4) var(--space-6); background: var(--color-ink); object-fit: cover; }
 .dialog-mark { padding-bottom: var(--space-2); border-bottom: var(--rule-status) solid var(--color-safety); color: var(--color-safety); }
 .dialog-actions { justify-content: flex-end; margin-top: var(--space-5); }
+.license-restore { display: grid; gap: var(--space-2); margin-top: var(--space-4); font-size: var(--text-sm); }
+.member-name { color: var(--color-ink-muted); font-size: var(--text-sm); }
+.nav-button { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--color-ink); font: inherit; text-decoration: underline; cursor: pointer; }
 
 @media (max-width: 760px) {
   .site-header { align-items: flex-start; }

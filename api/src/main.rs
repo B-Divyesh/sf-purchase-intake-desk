@@ -23,12 +23,18 @@ async fn main() {
         "default"
     };
     let address = SocketAddr::from(([0, 0, 0, 0], port));
+    let data_source = if env::var_os("DATA_DIR").is_some() {
+        "supplied"
+    } else {
+        "generated-default"
+    };
 
     info!(
         %address,
         build_sha = build_sha(),
         port_config = port_source,
         static_dir_config = static_source,
+        data_dir_config = data_source,
         "starting Intake Desk service"
     );
 

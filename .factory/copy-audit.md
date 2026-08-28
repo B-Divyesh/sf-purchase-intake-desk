@@ -1,6 +1,6 @@
 # Landing copy audit
 
-Audited: 2026-08-28 · Repair 1
+Audited: 2026-08-28 · Repair 2
 
 Method: visible landing headings, sentences, actions, facts, and footer copy
 were counted by space-separated words. Numerals and abbreviations count as one
@@ -16,7 +16,7 @@ word. Route labels and field labels are interface identifiers, not sentences.
 | No account. | 2 | Pass |
 | Keeps counts through a network drop. | 6 | Pass |
 | Exports receipt CSV. | 3 | Pass |
-| Dock plan: $149 per site each month. | 7 | Pass |
+| Dock plan: $49 per site each month. | 7 | Pass |
 | Northline Bearings | 2 | Pass |
 | Packing list NL-8821 | 3 | Pass |
 | Matched | 1 | Pass |
@@ -38,9 +38,9 @@ word. Route labels and field labels are interface identifiers, not sentences.
 | The demo uses sample data in your browser. | 8 | Pass |
 | Read the privacy notice | 4 | Pass |
 | One receiving site | 3 | Pass |
-| Shared site storage and staff access are planned for Dock. | 10 | Pass |
+| Dock keeps a team inbox, receipts, evidence, and audit history on the server. | 13 | Pass |
 | USD per site each month | 5 | Pass |
-| The current single-device workspace is free during the pilot. | 9 | Pass |
+| Recurring subscription. Sociobot is the merchant of record. | 8 | Pass |
 | Intake Desk records supplier deliveries and their exceptions. | 8 | Pass |
 | Built by Param Factory | 4 | Pass |
 

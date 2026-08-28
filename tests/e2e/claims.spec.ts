@@ -147,6 +147,41 @@ test('@claim:real-po-workspace imports customer CSV and keeps evidence with the 
   expect([...origins]).toEqual([new URL(page.url()).origin]);
 });
 
+test('@claim:multi-po-retention importing another PO keeps an earlier finalized receipt available', async ({ page }) => {
+  const importPo = async (number: string) => {
+    await page.goto('/start');
+    await page.getByLabel('Purchase order CSV').setInputFiles({
+      name: `${number}.csv`, mimeType: 'text/csv',
+      buffer: Buffer.from(`purchase_order,supplier,packing_list,item_code,description,ordered,order_unit,units_per_case\n${number},Harbor Fasteners,${number}-list,BOLT-8,Stainless bolt,2,case,20`),
+    });
+    await page.getByRole('button', { name: 'Check and import PO' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Review ${number}.`);
+  };
+  await importPo('PO-220');
+  await page.getByRole('link', { name: 'Count this delivery' }).click();
+  await page.getByRole('button', { name: 'Finalize receipt' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Finalize receipt' }).click();
+  await expect(page.getByText('Complete delivery')).toBeVisible();
+  await importPo('PO-221');
+  await page.goto('/app');
+  await expect(page.getByRole('link', { name: /PO-220/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /PO-221/ })).toBeVisible();
+  await page.getByRole('link', { name: /PO-220/ }).click();
+  await expect(page.getByRole('link', { name: 'Open finalized receipt' })).toBeVisible();
+  await page.getByRole('link', { name: 'Open finalized receipt' }).click();
+  await expect(page.getByText('Complete delivery')).toBeVisible();
+});
+
+test('@claim:dock-price-checkout states the recurring price and uses Sociobot checkout', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.pricing')).toContainText('$49');
+  const checkout = page.getByRole('link', { name: /Start Dock checkout/ });
+  await expect(checkout).toHaveAttribute('href', 'https://api.sociobot.in/api/v1/products/purchase-intake-desk/checkout?plan=dock-monthly');
+  await page.getByLabel('Restore a purchase').fill('license-example');
+  await page.getByRole('button', { name: 'Save license' }).click();
+  await expect(page.getByRole('status')).toContainText('License saved on this device');
+});
+
 test('@claim:offline-reload keeps changed counts offline', async ({ page, context }) => {
   await openReceive(page);
   await page.waitForFunction(() => (window as Window & { __INTAKE_SW_READY__?: boolean }).__INTAKE_SW_READY__ === true);
@@ -181,4 +216,17 @@ test('@claim:scanner-manual-fallback accepts scanner and typed codes', async ({ 
   await scan.fill('BLT-A42');
   await scan.press('Enter');
   await expect(page.locator('#received-line-blt-a42')).toBeFocused();
+});
+
+test('@claim:phone-qr-scanning decodes a phone camera barcode into the matching receipt line', async ({ page }) => {
+  await page.addInitScript(() => {
+    class TestDetector { async detect() { return [{ rawValue: 'BRG-6204' }]; } }
+    Object.defineProperty(window, 'BarcodeDetector', { value: TestDetector, configurable: true, writable: true });
+    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia: async () => new MediaStream() }, configurable: true });
+    Object.defineProperty(HTMLMediaElement.prototype, 'play', { value: async () => undefined, configurable: true });
+  });
+  await openReceive(page);
+  await page.getByRole('button', { name: 'Scan with phone camera' }).click();
+  await expect(page.locator('.live-notice')).toContainText('BRG-6204 scanned. The matching count is ready.');
+  await expect(page.locator('#received-line-brg-6204')).toBeFocused();
 });
