@@ -78,3 +78,14 @@ curl http://localhost:8080/ready
   ephemeral filesystem is unsuitable for the database, object retention, and
   backup snapshot; verify the deployment has a persistent volume before
   treating Dock records as retained.
+
+## Deployment evidence
+
+- Commit: `d10fb58` (`fix: retain team purchase orders and enable dock workflow`)
+- ACR build: `sociobotregistry.azurecr.io/sf-purchase-intake-desk:d10fb58`,
+  digest `sha256:da26c910001ea8412c11418a40f1a99590e5dae12ef8edd2e4e7d6dc45ef21f5`
+- Container App revision: `sf-purchase-intake-desk--d10fb58`, healthy with
+  100% traffic.
+- Verified after rollout on both the Container App FQDN and
+  `https://purchase-intake-desk.sociobot.in`: `/health` returned build SHA
+  `d10fb58`; `/ready` returned `{"status":"ready"}`.
