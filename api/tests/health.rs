@@ -61,3 +61,29 @@ async fn static_routes_rate_limit_by_first_forwarded_ip() {
     let response = limited.expect("burst must be rate limited");
     assert!(response.headers().contains_key("retry-after"));
 }
+
+#[tokio::test]
+async fn deep_links_return_the_spa_with_success_status() {
+    let fixture =
+        std::env::temp_dir().join(format!("intake-desk-static-fixture-{}", std::process::id()));
+    std::fs::create_dir_all(&fixture).expect("create fixture directory");
+    std::fs::write(
+        fixture.join("index.html"),
+        "<!doctype html><main>app</main>",
+    )
+    .expect("write fixture index");
+
+    let response = app(&fixture)
+        .oneshot(
+            Request::builder()
+                .uri("/demo/receive/po-nb-1047")
+                .header("x-forwarded-for", "203.0.113.50")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("deep link response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    std::fs::remove_dir_all(&fixture).expect("remove fixture directory");
+}

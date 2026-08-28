@@ -42,7 +42,7 @@ async fn health() -> Json<HealthResponse> {
 pub fn app(static_dir: impl AsRef<Path>) -> Router {
     let static_dir = PathBuf::from(static_dir.as_ref());
     let index = static_dir.join("index.html");
-    let static_files = ServeDir::new(static_dir).not_found_service(ServeFile::new(index));
+    let static_files = ServeDir::new(static_dir).fallback(ServeFile::new(index));
 
     let rate_limit = GovernorConfigBuilder::default()
         .per_millisecond(50)
@@ -70,8 +70,12 @@ pub fn app(static_dir: impl AsRef<Path>) -> Router {
         .layer(SetResponseHeaderLayer::if_not_present(
             CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
-                "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'",
+                "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self'",
             ),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::HeaderName::from_static("strict-transport-security"),
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
         ))
         .layer(SetResponseHeaderLayer::if_not_present(
             axum::http::HeaderName::from_static("permissions-policy"),
