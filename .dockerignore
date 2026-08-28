@@ -1,0 +1,14 @@
+.git
+.github
+.factory
+node_modules
+dist
+target
+api/target
+playwright-report
+test-results
+.env
+.env.*
+*.sqlite
+*.sqlite3
+data
