@@ -1,0 +1,14 @@
+{
+  "name": "Intake Desk",
+  "short_name": "Intake Desk",
+  "description": "Check supplier deliveries against purchase orders.",
+  "start_url": "/demo?demo=1",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4E9CF",
+  "theme_color": "#B83A1B",
+  "icons": [
+    {"src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any"},
+    {"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
