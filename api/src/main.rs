@@ -40,9 +40,9 @@ async fn main() {
         listener,
         app(static_dir).into_make_service_with_connect_info::<SocketAddr>(),
     )
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .expect("server stopped unexpectedly");
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .expect("server stopped unexpectedly");
 }
 
 fn read_port() -> (u16, &'static str) {

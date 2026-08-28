@@ -10,9 +10,7 @@ use axum::{
 };
 use serde::Serialize;
 use tower_governor::{
-    governor::GovernorConfigBuilder,
-    key_extractor::SmartIpKeyExtractor,
-    GovernorLayer,
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
 use tower_http::{
     services::{ServeDir, ServeFile},
