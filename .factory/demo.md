@@ -38,9 +38,9 @@ as an empty tutorial.
 - Reset closes/deletes the demo database, recreates the exact seed, clears only
   demo cache/data, and returns to the demo inbox. It cannot clear production
   stores.
-- “Start for real” leaves demo, discards demo changes, and goes to the public
-  public pricing section. M1 explains that accounts are not built yet; M2
-  enables sign-in. Demo records are never silently copied into production.
+- “Start for real” leaves demo, discards demo changes, and opens `/start`.
+  That route imports a real PO CSV into `intake-desk:workspace:v1`. Demo
+  records are never copied into the workspace.
 
 ## Offline verification
 

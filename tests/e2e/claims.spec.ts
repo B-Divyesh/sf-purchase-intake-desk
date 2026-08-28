@@ -53,9 +53,9 @@ test('@claim:exact-unit-conversion shows four cases as exactly 48 each', async (
 test('@claim:partial-discrepancy records shortage and damage in one case', async ({ page }) => {
   await finalize(page);
   await page.getByRole('link', { name: 'Open discrepancy' }).click();
-  await expect(page.getByRole('heading', { name: '2 each short · 1 seal damaged' })).toBeVisible();
-  await expect(page.getByText('Two belts did not arrive')).toBeVisible();
-  await expect(page.getByText('One seal is damaged')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '2 each short · 1 each damaged' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '2 each short', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '1 each damaged', exact: true })).toBeVisible();
 });
 
 test('@claim:immutable-correction appends a linked event', async ({ page }) => {
@@ -82,6 +82,69 @@ test('@claim:receipt-csv-export downloads three versioned line rows', async ({ p
   expect(csv).toContain('schema_version,receipt_id,purchase_order');
   expect(csv).toContain('BLT-A42');
   expect(csv).toContain(',-2,good,0,');
+});
+
+test('@claim:current-count-finalization records changed matched values everywhere', async ({ page }) => {
+  await openReceive(page);
+  await page.locator('#received-line-blt-a42').fill('48');
+  await page.locator('#condition-line-seal-28').selectOption('good');
+  await expect(page.locator('.finalize-bar')).toContainText('All 3 lines matched');
+  await page.getByRole('button', { name: 'Finalize receipt' }).click();
+  await expect(page.getByRole('dialog')).toContainText('all 3 lines matched');
+  await page.getByRole('dialog').getByRole('button', { name: 'Finalize receipt' }).click();
+  await expect(page.getByText('Complete delivery')).toBeVisible();
+  await expect(page.getByText('Finalized receipt with all 3 lines matched.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open discrepancy' })).toHaveCount(0);
+});
+
+test('@claim:exact-decimal-export exports 46.1 minus 48 as -1.9', async ({ page }) => {
+  await openReceive(page);
+  await page.locator('#received-line-blt-a42').fill('46.1');
+  await page.getByRole('button', { name: 'Finalize receipt' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Finalize receipt' }).click();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export receipt CSV' }).click();
+  const stream = await (await downloadPromise).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const csv = Buffer.concat(chunks).toString('utf8');
+  expect(csv).toContain(',48,46.1,-1.9,good,0,');
+  expect(csv).not.toContain('-1.8999999999999986');
+});
+
+test('@claim:damage-count-validation blocks damage above received', async ({ page }) => {
+  await openReceive(page);
+  await page.locator('#received-line-seal-28').fill('1');
+  await page.locator('#damaged-line-seal-28').fill('2');
+  await page.getByRole('button', { name: 'Finalize receipt' }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('cannot have more damaged items than received');
+  await expect(page.getByRole('alert')).toBeFocused();
+});
+
+test('@claim:real-po-workspace imports customer CSV and keeps evidence with the receipt', async ({ page }) => {
+  const origins = new Set<string>();
+  page.on('request', (request) => origins.add(new URL(request.url()).origin));
+  await page.goto('/start');
+  await page.getByLabel('Purchase order CSV').setInputFiles({
+    name: 'po-220.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('purchase_order,supplier,packing_list,item_code,description,ordered,order_unit,units_per_case\nPO-220,Harbor Fasteners,HF-18,BOLT-8,Stainless bolt,2.5,case,20'),
+  });
+  await page.getByRole('button', { name: 'Check and import PO' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Review PO-220.');
+  await expect(page.getByText('50 each')).toBeVisible();
+  await page.getByRole('link', { name: 'Count this delivery' }).click();
+  await page.getByLabel('Evidence caption').fill('Packing list at dock');
+  await page.getByLabel('Photo or PDF').setInputFiles({ name: 'packing-list.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) });
+  await expect(page.getByText(/packing-list\.png attached/)).toBeVisible();
+  await page.getByRole('button', { name: 'Finalize receipt' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Finalize receipt' }).click();
+  await expect(page.getByText('Complete delivery')).toBeVisible();
+  const databases = await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name));
+  expect(databases).toContain('intake-desk:workspace:v1');
+  expect(databases).not.toContain('intake-desk:demo:v1');
+  expect([...origins]).toEqual([new URL(page.url()).origin]);
 });
 
 test('@claim:offline-reload keeps changed counts offline', async ({ page, context }) => {

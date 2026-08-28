@@ -40,6 +40,18 @@ export interface DemoState {
   receivedBy: string;
   lines: PurchaseOrderLine[];
   events: ReceiptEvent[];
+  attachments?: EvidenceAttachment[];
+  source?: 'sample' | 'csv';
+}
+
+export interface EvidenceAttachment {
+  id: string;
+  name: string;
+  mediaType: string;
+  bytes: number;
+  checksum: string;
+  caption: string;
+  dataUrl: string;
 }
 
 export const DEMO_DATABASE = 'intake-desk:demo:v1';
@@ -100,4 +112,6 @@ export const createDemoSeed = (): DemoState => ({
     },
   ],
   events: [],
+  attachments: [],
+  source: 'sample',
 });

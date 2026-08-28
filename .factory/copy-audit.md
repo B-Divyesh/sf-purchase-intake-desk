@@ -1,6 +1,6 @@
 # Landing copy audit
 
-Audited: 2026-08-28 · Milestone M1
+Audited: 2026-08-28 · Repair 1
 
 Method: visible landing headings, sentences, actions, facts, and footer copy
 were counted by space-separated words. Numerals and abbreviations count as one
@@ -11,6 +11,7 @@ word. Route labels and field labels are interface identifiers, not sentences.
 | Check deliveries against the purchase order. | 6 | Pass |
 | For small receiving teams that need a clear record before the supplier van leaves. | 14 | Pass |
 | Try it with sample data | 5 | Pass |
+| Import your PO | 3 | Pass |
 | Opens one ready PO. | 4 | Pass |
 | No account. | 2 | Pass |
 | Keeps counts through a network drop. | 6 | Pass |
@@ -37,9 +38,9 @@ word. Route labels and field labels are interface identifiers, not sentences.
 | The demo uses sample data in your browser. | 8 | Pass |
 | Read the privacy notice | 4 | Pass |
 | One receiving site | 3 | Pass |
-| Production purchase orders, receipts, discrepancies, exports, and staff access. | 9 | Pass |
+| Shared site storage and staff access are planned for Dock. | 10 | Pass |
 | USD per site each month | 5 | Pass |
-| Accounts open in the next milestone. | 6 | Pass |
+| The current single-device workspace is free during the pilot. | 9 | Pass |
 | Intake Desk records supplier deliveries and their exceptions. | 8 | Pass |
 | Built by Param Factory | 4 | Pass |
 

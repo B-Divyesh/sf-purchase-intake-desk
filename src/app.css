@@ -73,6 +73,7 @@ a:hover { text-decoration-thickness: .16em; }
   z-index: 100;
   top: var(--space-2); left: var(--space-2);
   padding: var(--space-2) var(--space-3);
+  min-height: var(--target-min);
   transform: translateY(-180%);
   background: var(--color-surface);
   color: var(--color-ink);
@@ -100,12 +101,20 @@ a:hover { text-decoration-thickness: .16em; }
 
 .site-header nav a {
   min-height: var(--target-min);
+  min-width: var(--target-min);
+  padding-inline: var(--space-2);
   display: inline-flex;
   align-items: center;
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
+}
+.banner-actions a, .sheet-actions a, footer a, .legal a, .boundaries > a, .evidence-record > a {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
 }
 
 .site-header nav a[aria-current='page'] { text-decoration-thickness: .22em; }
@@ -310,6 +319,11 @@ input[aria-invalid='true'] { border-color: var(--color-danger); }
 .evidence-tray figure { margin: 0; }
 .evidence-tray svg { display: block; width: 100%; height: auto; color: var(--color-route); background: var(--color-surface-raised); }
 .evidence-tray figcaption { margin-top: var(--space-2); font-size: var(--text-sm); }
+.attachment-list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.attachment-list li { display: grid; gap: var(--space-1); overflow-wrap: anywhere; }
+.attachment-list a { min-height: var(--target-min); display: inline-flex; align-items: center; font-weight: 700; }
+.attachment-list span { color: var(--color-ink-muted); font-size: var(--text-sm); }
+.import-sheet { display: grid; gap: var(--space-5); max-width: 52rem; }
 .finalize-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: var(--space-5); border-block: var(--rule-status) solid var(--color-safety); background: var(--color-surface); padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom)); }
 .finalize-bar > div { display: grid; }
 .finalize-bar span { color: var(--color-ink-muted); }

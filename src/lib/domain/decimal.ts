@@ -42,6 +42,19 @@ export function subtractDecimal(left: string, right: string): string {
   return `${negative ? '-' : ''}${whole}${fraction ? `.${fraction}` : ''}`;
 }
 
+export function addDecimal(left: string, right: string): string {
+  const a = parseDecimal(left);
+  const b = parseDecimal(right);
+  if (!a || !b) throw new Error('Quantity must be a positive decimal number.');
+  const scale = Math.max(a.scale, b.scale);
+  const result = a.value * powerOfTen(scale - a.scale) + b.value * powerOfTen(scale - b.scale);
+  if (scale === 0) return result.toString();
+  const digits = result.toString().padStart(scale + 1, '0');
+  const whole = digits.slice(0, -scale);
+  const fraction = digits.slice(-scale).replace(/0+$/, '');
+  return `${whole}${fraction ? `.${fraction}` : ''}`;
+}
+
 export function multiplyDecimal(left: string, right: string): string {
   const a = parseDecimal(left);
   const b = parseDecimal(right);

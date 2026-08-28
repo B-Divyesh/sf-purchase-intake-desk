@@ -1,4 +1,4 @@
-const CACHE = 'intake-desk:demo-shell:m1';
+const CACHE = 'intake-desk:demo-shell:__BUILD_SHA__';
 const CORE = ['/', '/index.html', '/favicon.svg', '/apple-touch-icon.png', '/og-image.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

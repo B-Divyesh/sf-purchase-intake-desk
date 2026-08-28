@@ -14,4 +14,12 @@ describe('receipt CSV', () => {
     expect(rows[2]).toContain('BLT-A42');
     expect(rows[2]).toContain(',-2,');
   });
+
+  it('exports decimal differences without binary floating-point residue', () => {
+    const state = createDemoSeed();
+    state.lines[1].receivedEach = '46.1';
+    const csv = receiptCsv(state);
+    expect(csv).toContain(',48,46.1,-1.9,good,0,');
+    expect(csv).not.toContain('-1.8999999999999986');
+  });
 });

@@ -61,5 +61,33 @@
     "where": "receive scan field and compatibility note",
     "test": "npm run test:e2e -- --grep @claim:scanner-manual-fallback",
     "sandbox": "fresh demo NB-1047; deny camera, send a keyboard-wedge burst for BRG-6204, type BLT-A42 manually, and assert both lines receive focus"
+  },
+  {
+    "id": "current-count-finalization",
+    "claim": "Finalized receipts, discrepancies, and audit text use the receiver's current counts.",
+    "where": "finalization bar, confirmation, receipt, discrepancy, audit history",
+    "test": "npm run test:e2e -- --grep @claim:current-count-finalization",
+    "sandbox": "fresh demo; change every seed discrepancy to matched, finalize, then assert no seed shortage or damage appears"
+  },
+  {
+    "id": "exact-decimal-export",
+    "claim": "Receipt CSV keeps decimal quantity differences exact.",
+    "where": "receipt CSV export, README",
+    "test": "npm run test:e2e -- --grep @claim:exact-decimal-export",
+    "sandbox": "fresh demo; receive 46.1 against 48, finalize, download CSV, and assert the difference is -1.9"
+  },
+  {
+    "id": "damage-count-validation",
+    "claim": "A receipt cannot finalize when damaged quantity is greater than received quantity.",
+    "where": "receipt validation",
+    "test": "npm run test:e2e -- --grep @claim:damage-count-validation",
+    "sandbox": "fresh demo; enter received 1 and damaged 2, attempt finalization, and assert the dialog stays closed with a focused error"
+  },
+  {
+    "id": "real-po-workspace",
+    "claim": "Imports a real purchase-order CSV and keeps attached photo or PDF evidence with its receipt on this device.",
+    "where": "landing, import workspace, evidence tray, README",
+    "test": "npm run test:e2e -- --grep @claim:real-po-workspace",
+    "sandbox": "fresh browser; import a customer CSV, verify exact case conversion, attach evidence, finalize, and assert only the separate workspace database and same-origin traffic"
   }
 ]

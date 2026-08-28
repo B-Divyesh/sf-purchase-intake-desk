@@ -16,6 +16,26 @@ export function routeMeta(pathname: string): RouteMeta {
     title: 'Terms — Intake Desk',
     description: 'Terms for using the local Intake Desk sample receiving workflow.',
   };
+  if (pathname === '/start') return {
+    title: 'Import a purchase order — Intake Desk',
+    description: 'Import a supplier purchase-order CSV and start a real receipt in a local workspace.',
+  };
+  if (pathname.startsWith('/app/discrepancies/')) return {
+    title: 'Discrepancy — Intake Desk',
+    description: 'Review shortages, extra items, damage, and receipt evidence.',
+  };
+  if (pathname.startsWith('/app/receipts/')) return {
+    title: 'Receipt — Intake Desk',
+    description: 'Review and export a finalized supplier receipt.',
+  };
+  if (pathname.startsWith('/app/receive/')) return {
+    title: 'Receive delivery — Intake Desk',
+    description: 'Count a supplier delivery and attach evidence.',
+  };
+  if (pathname.startsWith('/app/purchase-orders/') || pathname === '/app') return {
+    title: 'Purchase orders — Intake Desk',
+    description: 'Review imported purchase orders in this device workspace.',
+  };
   if (pathname.startsWith('/demo/discrepancies/')) return {
     title: 'Discrepancy — Intake Desk',
     description: 'Review the sample shortage and damaged-item record.',

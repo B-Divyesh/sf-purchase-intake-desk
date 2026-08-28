@@ -10,7 +10,7 @@ COPY public ./public
 COPY src ./src
 RUN BUILD_SHA="${BUILD_SHA:-${GIT_SHA:-${SOURCE_COMMIT:-dev}}}" npm run build:web
 
-FROM rust:1.98-bookworm AS api-builder
+FROM rust:1-slim AS api-builder
 ARG BUILD_SHA=dev
 ARG GIT_SHA=dev
 ARG SOURCE_COMMIT=dev

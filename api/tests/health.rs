@@ -87,3 +87,61 @@ async fn deep_links_return_the_spa_with_success_status() {
     assert_eq!(response.status(), StatusCode::OK);
     std::fs::remove_dir_all(&fixture).expect("remove fixture directory");
 }
+
+#[tokio::test]
+async fn unknown_routes_return_the_spa_with_not_found_status() {
+    let fixture = std::env::temp_dir().join(format!(
+        "intake-desk-not-found-fixture-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&fixture).expect("create fixture directory");
+    std::fs::write(
+        fixture.join("index.html"),
+        "<!doctype html><main>app</main>",
+    )
+    .expect("write fixture index");
+
+    let response = app(&fixture)
+        .oneshot(
+            Request::builder()
+                .uri("/not-a-real-route")
+                .header("x-forwarded-for", "203.0.113.51")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("not-found response");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        response.headers()["cache-control"],
+        "no-cache, no-store, must-revalidate"
+    );
+    std::fs::remove_dir_all(&fixture).expect("remove fixture directory");
+}
+
+#[tokio::test]
+async fn hashed_assets_receive_immutable_cache_policy() {
+    let fixture =
+        std::env::temp_dir().join(format!("intake-desk-cache-fixture-{}", std::process::id()));
+    std::fs::create_dir_all(fixture.join("assets")).expect("create assets directory");
+    std::fs::write(fixture.join("assets/app-abc123.js"), "export {}").expect("write asset");
+
+    let response = app(&fixture)
+        .oneshot(
+            Request::builder()
+                .uri("/assets/app-abc123.js")
+                .header("x-forwarded-for", "203.0.113.52")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("asset response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()["cache-control"],
+        "public, max-age=31536000, immutable"
+    );
+    std::fs::remove_dir_all(&fixture).expect("remove fixture directory");
+}

@@ -29,7 +29,7 @@ async fn main() {
         build_sha = build_sha(),
         port_config = port_source,
         static_dir_config = static_source,
-        "starting Intake Desk planning scaffold"
+        "starting Intake Desk service"
     );
 
     let listener = TcpListener::bind(address)
