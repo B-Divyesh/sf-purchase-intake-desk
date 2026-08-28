@@ -1,0 +1,31 @@
+{
+  "slug": "purchase-intake-desk",
+  "title": "Intake Desk",
+  "territory": "utilities",
+  "user": "10–100-person distributors, workshops, and small manufacturers that receive supplier deliveries against purchase orders but are not ready to implement an ERP.",
+  "evidence": [
+    {
+      "url": "https://hn.algolia.com/api/v1/items/46541949",
+      "date": "2026-01-08",
+      "quote_or_summary": "A team describes smaller companies running procurement in spreadsheets/email: missed orders, lost documents, manual packing-list matching, and slow goods receipt; they say ERP alternatives were too heavy and expensive."
+    },
+    {
+      "url": "https://github.com/Dolibarr/Dolibarr/issues/38168",
+      "date": "2026-05-11",
+      "quote_or_summary": "A current ERP issue reports that goods reception cannot load the items from a supplier order and can create only an empty reception—the precise intake step that must be dependable."
+    }
+  ],
+  "recurrence": "The 2026 SMB procurement report describes repeated order, document, and warehouse intake chaos; a separate ERP issue confirms receiving is a brittle critical path rather than a solved spreadsheet replacement.",
+  "current_workaround": "Email POs, print packing lists, check quantities by hand, update spreadsheets, then chase suppliers for status.",
+  "incumbents_and_gap": "Odoo, Dolibarr, NetSuite, Cin7, and procure-to-pay suites are broad and setup-heavy. The gap is a one-day receiving desk that can start from CSV/email POs and create a trustworthy discrepancy record.",
+  "smallest_useful_product": "Supplier PO inbox, QR/phone receiving, expected-versus-received scan/count, photo/doc attachment, discrepancy/partial-delivery workflow, and accounting/ERP CSV export. Non-goals: general ledger, warehouse management system, forecasting, or supplier marketplace.",
+  "success_measure": "A pilot warehouse records 95% of deliveries on the day received and cuts time from arrival to discrepancy notification by 50%.",
+  "artifact_class": "web-with-backend",
+  "monetization": "subscription — $149/site/month supports a workflow used by receiving staff every day and is materially cheaper than an ERP project.",
+  "constraints": "Offline-capable scanning, hardware/browser compatibility, document retention, accurate unit conversion, immutable receipt audit trail, and integration import validation.",
+  "est_build_effort": "L",
+  "scale": "venture",
+  "why_distinct": "It starts at the receiving dock and produces evidence of exceptions, instead of competing as a full procurement or ERP platform.",
+  "confidence": 4,
+  "state": "RESEARCHED"
+}
