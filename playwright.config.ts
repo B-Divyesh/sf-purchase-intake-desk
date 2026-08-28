@@ -13,10 +13,19 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'phone', use: { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } } },
+    {
+      name: 'phone',
+      use: {
+        ...devices['Desktop Chrome'],
+        browserName: 'chromium',
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
   ],
   webServer: {
-    command: 'npm run dev:web -- --host 127.0.0.1',
+    command: 'npm run build:web && npm exec vite preview -- --host 127.0.0.1 --port 5173',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
   },
