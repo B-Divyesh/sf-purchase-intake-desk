@@ -145,3 +145,27 @@ async fn hashed_assets_receive_immutable_cache_policy() {
     );
     std::fs::remove_dir_all(&fixture).expect("remove fixture directory");
 }
+
+#[tokio::test]
+async fn unauthenticated_api_response_names_bearer_auth_and_is_not_cacheable() {
+    let response = app("../dist")
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/me")
+                .header("x-forwarded-for", "203.0.113.80")
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("API response");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.headers()["www-authenticate"],
+        "Bearer realm=\"Intake Desk\""
+    );
+    assert_eq!(
+        response.headers()["cache-control"],
+        "no-cache, no-store, must-revalidate"
+    );
+}

@@ -1,6 +1,6 @@
 # Landing copy audit
 
-Audited: 2026-08-28 · Repair 2
+Audited: 2026-09-05 · Repair 3
 
 Method: visible landing headings, sentences, actions, facts, and footer copy
 were counted by space-separated words. Numerals and abbreviations count as one
@@ -16,7 +16,7 @@ word. Route labels and field labels are interface identifiers, not sentences.
 | No account. | 2 | Pass |
 | Keeps counts through a network drop. | 6 | Pass |
 | Exports receipt CSV. | 3 | Pass |
-| Dock plan: $49 per site each month. | 7 | Pass |
+| Dock checkout is not available yet. | 6 | Pass |
 | Northline Bearings | 2 | Pass |
 | Packing list NL-8821 | 3 | Pass |
 | Matched | 1 | Pass |
@@ -38,9 +38,11 @@ word. Route labels and field labels are interface identifiers, not sentences.
 | The demo uses sample data in your browser. | 8 | Pass |
 | Read the privacy notice | 4 | Pass |
 | One receiving site | 3 | Pass |
-| Dock keeps a team inbox, receipts, evidence, and audit history on the server. | 13 | Pass |
+| An active Dock site keeps a team inbox, receipts, evidence, and audit history on the server. | 16 | Pass |
 | USD per site each month | 5 | Pass |
-| Recurring subscription. Sociobot is the merchant of record. | 8 | Pass |
+| Checkout is unavailable while the Sociobot product mapping is completed. | 10 | Pass |
+| No payment can be taken here. | 6 | Pass |
+| Checkout unavailable | 2 | Pass |
 | Intake Desk records supplier deliveries and their exceptions. | 8 | Pass |
 | Built by Param Factory | 4 | Pass |
 
@@ -59,5 +61,5 @@ journey, ecosystem, or AI-powered.
 | Company sending the delivery | supplier |
 
 “PO” appears only as the familiar short form beside the full term or in the
-fixed note “Opens one ready PO.” Item identifiers, packing list, count, line,
-and event name distinct objects rather than synonyms for the terms above.
+fixed note “Opens one ready PO.” Item, packing list, count, line, and event
+name distinct objects rather than synonyms for the terms above.

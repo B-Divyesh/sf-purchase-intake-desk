@@ -14,4 +14,9 @@ describe('purchase order CSV intake', () => {
   it('rejects duplicate item codes before storing anything', () => {
     expect(() => importPurchaseOrderCsv(`${csv}\nPO-22,"Acme, Ltd",PL-9,BELT-1,Other,1,each,1`)).toThrow('repeats item');
   });
+
+  it('rejects zero ordered and case-conversion quantities', () => {
+    expect(() => importPurchaseOrderCsv(csv.replace(',4,case,12.5', ',0,case,12.5'))).toThrow('greater than zero');
+    expect(() => importPurchaseOrderCsv(csv.replace(',4,case,12.5', ',4,case,0'))).toThrow('greater than zero');
+  });
 });

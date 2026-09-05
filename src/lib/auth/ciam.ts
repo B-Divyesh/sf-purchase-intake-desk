@@ -25,6 +25,15 @@ export async function finishSignIn(): Promise<string | null> {
   return token.accessToken || token.idToken;
 }
 
+export async function restoreSignIn(): Promise<string | null> {
+  await ciam.initialize();
+  const account = ciam.getActiveAccount() ?? ciam.getAllAccounts()[0];
+  if (!account) return null;
+  ciam.setActiveAccount(account);
+  const token = await ciam.acquireTokenSilent({ account, scopes: ['openid', 'profile', 'email'] });
+  return token.accessToken || token.idToken;
+}
+
 export async function signOut(): Promise<void> {
   await ciam.initialize();
   const account = ciam.getActiveAccount();

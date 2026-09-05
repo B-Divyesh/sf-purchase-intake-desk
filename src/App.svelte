@@ -32,11 +32,11 @@
   let scanning = false;
   let cameraMessage = '';
   let cameraTimer: number | undefined;
-  let licenseToken = '';
   let billingMessage = '';
   let signedInName = '';
   let accessToken = '';
   let activeSiteId = '';
+  let entitlementStatus = 'unavailable';
   let correctionReason = '';
   let importError = '';
   let attachmentCaption = '';
@@ -56,6 +56,12 @@
 
   onMount(() => {
     const query = new URLSearchParams(window.location.search);
+    if (query.has('license')) {
+      query.delete('license');
+      const search = query.toString();
+      history.replaceState({}, '', `${pathname}${search ? `?${search}` : ''}`);
+      billingMessage = 'Checkout returns cannot be attached until the Sociobot product mapping is complete.';
+    }
     if (pathname === '/' && query.get('demo') === '1') {
       history.replaceState({}, '', '/demo?demo=1');
       pathname = '/demo';
@@ -66,7 +72,10 @@
     }
     if (pathname === '/auth/callback') void completeSignIn();
     if (pathname === '/demo' || pathname.startsWith('/demo/')) void loadDemo();
-    if (pathname === '/app' || pathname.startsWith('/app/')) void loadWorkspace();
+    if (pathname === '/app' || pathname.startsWith('/app/')) {
+      void loadWorkspace();
+      void restoreDockSession();
+    } else if (pathname === '/start') void restoreDockSession();
 
     const pop = () => {
       pathname = window.location.pathname;
@@ -92,21 +101,84 @@
       const { finishSignIn } = await import('./lib/auth/ciam');
       const token = await finishSignIn();
       if (!token) { error = 'Sign-in did not return a token. Try again.'; return; }
-      const response = await fetch('/api/v1/me', { headers: { Authorization: `Bearer ${token}` } });
-      if (!response.ok) throw new Error('The receiving site could not be opened.');
-      const member = await response.json() as { name: string; site_id: string };
-      signedInName = member.name;
-      accessToken = token;
-      activeSiteId = member.site_id;
-      for (const order of await workspaceRepository.list()) void syncDockRecord(order);
-      notice = `Signed in as ${member.name}. Your Dock site is ready.`;
+      const member = await openDockSession(token);
+      notice = member.entitlement === 'active'
+        ? `Signed in as ${member.name}. Your Dock site is ready.`
+        : `Signed in as ${member.name}. Dock is read-only while checkout is unavailable.`;
       history.replaceState({}, '', '/app'); pathname = '/app'; void loadWorkspace();
     } catch { error = 'Sign-in could not finish. Check the registered callback address and try again.'; }
+  }
+
+  async function restoreDockSession() {
+    try {
+      const { restoreSignIn } = await import('./lib/auth/ciam');
+      const token = await restoreSignIn();
+      if (token) await openDockSession(token);
+    } catch {
+      notice = 'Your saved sign-in could not be restored. Sign in again to open server records.';
+    }
+  }
+
+  async function openDockSession(token: string): Promise<{ name: string; site_id: string; entitlement: string }> {
+    const response = await fetch('/api/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error('The receiving site could not be opened.');
+    const member = await response.json() as { name: string; site_id: string; entitlement: string };
+    signedInName = member.name;
+    accessToken = token;
+    activeSiteId = member.site_id;
+    entitlementStatus = member.entitlement;
+    await hydrateDockRecords();
+    if (member.entitlement === 'active') {
+      for (const order of await workspaceRepository.list()) await syncDockRecord(order);
+    }
+    return member;
+  }
+
+  async function hydrateDockRecords() {
+    if (!accessToken || !activeSiteId) return;
+    const response = await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/purchase-orders`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok) throw new Error('Server purchase orders could not be loaded.');
+    const payload = await response.json() as { purchase_orders?: unknown[] };
+    for (const record of payload.purchase_orders ?? []) {
+      let candidate = ((record as { payload?: unknown })?.payload ?? record) as Partial<DemoState>;
+      if (candidate.status === 'finalized' && candidate.receiptId) {
+        const receiptResponse = await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/receipts/${encodeURIComponent(candidate.receiptId)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (receiptResponse.ok) {
+          const receipt = await receiptResponse.json() as { payload?: DemoState; events?: Array<{ id: string; sequence: number; type: 'finalized' | 'corrected'; payload?: { actor?: string; summary?: string }; previous_hash: string; hash: string; created_at: string }> };
+          if (receipt.payload?.schemaVersion === 1) {
+            const receiptState = receipt.payload;
+            candidate = {
+              ...receiptState,
+              events: (receipt.events ?? []).map((event) => ({
+                id: event.id,
+                sequence: event.sequence,
+                type: event.type,
+                at: event.created_at,
+                actor: event.payload?.actor ?? receiptState.receivedBy,
+                summary: event.payload?.summary ?? (event.type === 'corrected' ? 'Correction recorded. See the server record.' : summarizeReceipt(receiptState).audit),
+                previousHash: event.previous_hash,
+                hash: event.hash,
+              })),
+            };
+          }
+        }
+      }
+      if (candidate.schemaVersion === 1 && candidate.source === 'csv' && candidate.purchaseOrderId) {
+        await workspaceRepository.save(candidate as DemoState);
+      }
+    }
+    state = null;
+    await loadWorkspace();
   }
 
   async function signIn() {
     const { startSignIn } = await import('./lib/auth/ciam');
     await startSignIn();
+  }
+
+  async function signOut() {
+    const { signOut } = await import('./lib/auth/ciam');
+    await signOut();
   }
 
   async function registerOfflineShell() {
@@ -189,14 +261,14 @@
     void focusPageTitle();
   }
 
-  async function save(next: DemoState, message: string) {
+  async function save(next: DemoState, message: string, sync = true) {
     state = next;
     try {
       if (isDemo) await demoRepository.save(next);
       else {
         await workspaceRepository.save(next);
         workspaceOrders = await workspaceRepository.list();
-        void syncDockRecord(next);
+        if (sync) void syncDockRecord(next);
       }
       notice = message;
       error = '';
@@ -205,17 +277,30 @@
     }
   }
 
-  async function syncDockRecord(next: DemoState) {
+  async function syncDockRecord(next: DemoState, shouldFinalize = false) {
     if (!accessToken || !activeSiteId || next.source !== 'csv') return;
+    if (entitlementStatus !== 'active') {
+      notice = 'Saved on this device. Dock server writes are read-only while checkout is unavailable.';
+      return;
+    }
     try {
       const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
-      await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/purchase-orders`, { method: 'POST', headers, body: JSON.stringify({ purchase_order_id: next.purchaseOrderId, po_number: next.poNumber, supplier: next.supplier, site: next.site, payload: next }) });
-      await fetch('/api/v1/receipts', { method: 'POST', headers, body: JSON.stringify({ purchase_order_id: next.purchaseOrderId, receipt_id: next.receiptId, payload: next }) });
+      const requests = [
+        await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/purchase-orders`, { method: 'POST', headers, body: JSON.stringify({ purchase_order_id: next.purchaseOrderId, po_number: next.poNumber, supplier: next.supplier, site: next.site, payload: next }) }),
+        await fetch('/api/v1/receipts', { method: 'POST', headers, body: JSON.stringify({ site_id: activeSiteId, purchase_order_id: next.purchaseOrderId, receipt_id: next.receiptId, payload: next }) }),
+      ];
+      if (requests.some((response) => !response.ok)) throw new Error('Dock rejected the record.');
       for (const attachment of next.attachments ?? []) {
         const dataBase64 = attachment.dataUrl.split(',', 2)[1];
-        if (dataBase64) await fetch(`/api/v1/receipts/${encodeURIComponent(next.receiptId)}/attachments`, { method: 'POST', headers, body: JSON.stringify({ name: attachment.name, media_type: attachment.mediaType, data_base64: dataBase64 }) });
+        if (dataBase64) {
+          const response = await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/receipts/${encodeURIComponent(next.receiptId)}/attachments`, { method: 'POST', headers, body: JSON.stringify({ id: attachment.id, name: attachment.name, media_type: attachment.mediaType, data_base64: dataBase64 }) });
+          if (!response.ok) throw new Error('Dock rejected the evidence file.');
+        }
       }
-      if (next.status === 'finalized') await fetch(`/api/v1/receipts/${encodeURIComponent(next.receiptId)}/finalize`, { method: 'POST', headers });
+      if (shouldFinalize) {
+        const response = await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/receipts/${encodeURIComponent(next.receiptId)}/finalize`, { method: 'POST', headers });
+        if (!response.ok) throw new Error('Dock could not finalize the server receipt.');
+      }
     } catch { notice = 'Saved on this device. Server sync will retry after you return online.'; }
   }
 
@@ -304,16 +389,6 @@
     }
   }
 
-  async function restoreLicense(event: SubmitEvent) {
-    event.preventDefault();
-    if (!licenseToken.trim()) { billingMessage = 'Paste the license token from checkout.'; return; }
-    localStorage.setItem('sb_license:purchase-intake-desk', licenseToken.trim());
-    if (accessToken) {
-      const response = await fetch('/api/v1/billing/attach', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ license: licenseToken.trim() }) });
-      billingMessage = response.ok ? 'License attached to your site and queued for verification.' : 'License is saved on this device. Sign in again to attach it to your site.';
-    } else billingMessage = 'License saved on this device. Sign in to attach it to your site.';
-  }
-
   function openDialog(dialog: HTMLDialogElement, trigger: EventTarget | null) {
     lastDialogTrigger = trigger instanceof HTMLElement ? trigger : null;
     dialog.showModal();
@@ -348,12 +423,14 @@
   async function finalizeReceipt() {
     if (!state || busy) return;
     busy = true;
+    const eventAt = isDemo ? state.receivedAt : new Date().toISOString();
     const events = await appendEvent(state.events, {
-      type: 'finalized', at: state.receivedAt, actor: state.receivedBy,
+      type: 'finalized', at: eventAt, actor: state.receivedBy,
       summary: summarizeReceipt(state).audit,
     });
     const next = { ...state, status: 'finalized' as const, revision: state.revision + 1, events };
-    await save(next, 'Receipt finalized. The original counts are now read-only.');
+    await save(next, 'Receipt finalized. The original counts are now read-only.', false);
+    if (!isDemo) await syncDockRecord(next, true);
     chainVerified = await verifyEventChain(events);
     busy = false;
     finalizeDialog.close();
@@ -366,11 +443,21 @@
   async function recordCorrection() {
     if (!state || !correctionReason.trim() || busy) return;
     busy = true;
+    const eventAt = isDemo ? '2026-08-28T10:06:00' : new Date().toISOString();
+    const reason = correctionReason.trim();
     const events = await appendEvent(state.events, {
-      type: 'corrected', at: '2026-08-28T10:06:00', actor: state.receivedBy,
-      summary: `Correction recorded: ${correctionReason.trim()}`,
+      type: 'corrected', at: eventAt, actor: state.receivedBy,
+      summary: `Correction recorded: ${reason}`,
     });
-    await save({ ...state, events }, 'Correction added as a new event. The final receipt was not rewritten.');
+    await save({ ...state, events }, 'Correction added as a new event. The final receipt was not rewritten.', false);
+    if (!isDemo && accessToken && activeSiteId && entitlementStatus === 'active') {
+      const response = await fetch(`/api/v1/sites/${encodeURIComponent(activeSiteId)}/receipts/${encodeURIComponent(state.receiptId)}/corrections`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      if (!response.ok) notice = 'Correction saved on this device. Server sync needs another try.';
+    }
     chainVerified = await verifyEventChain(events);
     correctionReason = '';
     busy = false;
@@ -499,7 +586,7 @@
     <a href="/demo" aria-current={isDemo ? 'page' : undefined} onclick={(event) => navigate(event, '/demo')}>Demo</a>
     <a href="/start" aria-current={pathname === '/start' || isWorkspace ? 'page' : undefined} onclick={(event) => navigate(event, '/start')}>Import PO</a>
     <a href="/privacy" aria-current={pathname === '/privacy' ? 'page' : undefined} onclick={(event) => navigate(event, '/privacy')}>Privacy</a>
-    {#if signedInName}<span class="member-name">{signedInName}</span>{:else}<button class="nav-button" type="button" onclick={signIn}>Sign in</button>{/if}
+    {#if signedInName}<span class="member-name">{signedInName}</span><button class="nav-button" type="button" onclick={signOut}>Sign out</button>{:else}<button class="nav-button" type="button" onclick={signIn}>Sign in</button>{/if}
   </nav>
 </header>
 
@@ -520,16 +607,16 @@
         <h1 id="page-title" tabindex="-1">Check deliveries against the purchase order.</h1>
         <p class="lead">For small receiving teams that need a clear record before the supplier van leaves.</p>
         <div class="hero-action"><a class="button primary" href="/demo" onclick={(event) => navigate(event, '/demo')}>Try it with sample data</a><span>Opens one ready PO. No account.</span><a class="button secondary" href="/start" onclick={(event) => navigate(event, '/start')}>Import your PO</a></div>
-        <ul class="plain-facts" aria-label="Product facts"><li>Keeps counts through a network drop.</li><li>Exports receipt CSV.</li><li>Dock plan: $49 per site each month.</li></ul>
+        <ul class="plain-facts" aria-label="Product facts"><li>Keeps counts through a network drop.</li><li>Exports receipt CSV.</li><li>Dock checkout is not available yet.</li></ul>
       </div>
-      <aside class="manifest-preview" aria-labelledby="preview-title">
+      <div class="manifest-preview">
         <div class="manifest-header"><span>WEST YARD</span><span>NB-1047</span></div>
         <h2 id="preview-title">Northline Bearings</h2><p class="muted">Packing list NL-8821</p>
         <div class="preview-row"><span>BRG-6204</span><strong>120 / 120</strong><span class="status success">Matched</span></div>
         <div class="preview-row"><span>BLT-A42</span><strong>46 / 48</strong><span class="status danger">2 short</span></div>
         <div class="preview-row"><span>SEAL-28</span><strong>24 / 24</strong><span class="status danger">1 damaged</span></div>
         <a class="route-link" href="/demo/receive/po-nb-1047" onclick={(event) => navigate(event, '/demo/receive/po-nb-1047')}>Open this sample <span aria-hidden="true">→</span></a>
-      </aside>
+      </div>
     </section>
 
     <section class="landing-section product-preview" aria-labelledby="product-title">
@@ -549,8 +636,8 @@
     </section>
 
     <section id="pricing" class="landing-section pricing" aria-labelledby="pricing-title">
-      <div><div class="section-index">05 / DOCK PLAN</div><h2 id="pricing-title">One receiving site</h2><p>Dock keeps a team inbox, receipts, evidence, and audit history on the server.</p></div>
-      <div class="price"><strong>$49</strong><span>USD per site each month</span><p>Recurring subscription. Sociobot is the merchant of record.</p><a class="button primary" href="https://api.sociobot.in/api/v1/products/purchase-intake-desk/checkout?plan=dock-monthly">Start Dock checkout <span class="visually-hidden">(opens Sociobot checkout)</span></a><form class="license-restore" onsubmit={restoreLicense}><label for="license-token">Restore a purchase</label><input id="license-token" bind:value={licenseToken} autocomplete="off" /><button class="text-button" type="submit">Save license</button>{#if billingMessage}<span role="status">{billingMessage}</span>{/if}</form></div>
+      <div><div class="section-index">05 / DOCK PLAN</div><h2 id="pricing-title">One receiving site</h2><p>An active Dock site keeps a team inbox, receipts, evidence, and audit history on the server.</p></div>
+      <div class="price"><strong>$149</strong><span>USD per site each month</span><p>Checkout is unavailable while the Sociobot product mapping is completed. No payment can be taken here.</p><button class="button primary" type="button" disabled>Checkout unavailable</button>{#if billingMessage}<span role="status">{billingMessage}</span>{/if}</div>
     </section>
   {:else if pathname === '/start'}
     <section class="app-heading" aria-labelledby="page-title"><div class="route-mark">WORKSPACE / IMPORT</div><h1 id="page-title" tabindex="-1">Import a purchase order.</h1><p class="lead">Use your supplier CSV to start a real receipt on this device.</p></section>
@@ -595,7 +682,7 @@
         </section>
       {:else if pathname.startsWith(`${deskBase}/receive/`)}
         <section class="app-heading" aria-labelledby="page-title"><div class="route-mark">RECEIVE / {state.poNumber}</div><h1 id="page-title" tabindex="-1">Count the delivery.</h1><p class="lead">{state.supplier} · Packing list {state.packingList}</p></section>
-        <div class:offline={!connectionOnline} class="connection-strip" role="status"><strong>{connectionOnline ? 'Saved on this device' : 'Offline · saved on this device'}</strong><span>{isDemo ? 'Demo changes are not sent anywhere.' : 'This workspace stays in this browser.'}</span></div>
+        <div class:offline={!connectionOnline} class="connection-strip" role="status"><strong>{connectionOnline ? 'Saved on this device' : 'Offline · saved on this device'}</strong><span>{isDemo ? 'Demo changes are not sent anywhere.' : entitlementStatus === 'active' ? 'Signed-in Dock records also sync to the server.' : 'Dock server writes are read-only; this workspace stays in this browser.'}</span></div>
         {#if error}<div id="error-summary" class="error-summary" role="alert" tabindex="-1"><strong>Check this receipt</strong><span>{error}</span></div>{/if}
         <section class="scan-sheet" aria-labelledby="scan-title">
           <div><h2 id="scan-title">Find an item</h2><p>Use a keyboard scanner or type the code.</p></div>
@@ -641,22 +728,24 @@
       {:else}
         <section class="state-panel" aria-labelledby="page-title"><div class="route-mark">RECORD / 404</div><h1 id="page-title" tabindex="-1">This receipt is not here.</h1><p>Return to the purchase-order inbox.</p><a class="button primary" href={deskBase} onclick={(event) => navigate(event, deskBase)}>Open the inbox</a></section>
       {/if}
+    {:else}
+      <section class="state-panel" aria-labelledby="page-title"><div class="route-mark">WORKSPACE / EMPTY</div><h1 id="page-title" tabindex="-1">Import your first purchase order.</h1><p>Choose a supplier CSV to start a receipt on this device.</p><a class="button primary" href="/start" onclick={(event) => navigate(event, '/start')}>Import a purchase order</a></section>
     {/if}
   {:else if pathname === '/auth/callback'}
     <section class="state-panel" aria-labelledby="page-title"><h1 id="page-title" tabindex="-1">Signing you in.</h1><p>Opening your receiving site…</p></section>
   {:else if pathname === '/privacy'}
-    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / PRIVACY</div><h1 id="page-title" tabindex="-1">Know where receiving data is stored.</h1><p class="lead">The demo stays in this browser. Signed-in Dock sites retain purchase orders, receipts, audit events, and evidence on the Intake Desk server.</p><h2>What this browser stores</h2><p>The demo uses <code>intake-desk:demo:v1</code>. The offline workspace cache uses <code>intake-desk:workspace:v1</code>.</p><h2>What Dock stores</h2><p>Dock stores tenant-scoped receipt records in a server database and evidence files in its retained object store. It keeps a backup snapshot after finalization. Intake Desk uses your Entra object ID, not your email address, as the account key.</p><h2>What leaves this device</h2><p>Demo actions stay local. When you sign in, real receiving records go to this same-origin service. Checkout and license verification use Sociobot only when you choose those actions. There is no analytics, advertising, or AI request.</p><h2>Your control</h2><p>Clearing browser data removes only the cache. Export records before deleting a Dock site. Contact us for account deletion or retention questions.</p><p>Questions: <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p></article>
+    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / PRIVACY</div><h1 id="page-title" tabindex="-1">Know where receiving data is stored.</h1><p class="lead">The demo stays in this browser. The local workspace stays on this device.</p><h2>What this browser stores</h2><p>The demo uses <code>intake-desk:demo:v1</code>. The offline workspace cache uses <code>intake-desk:workspace:v1</code>.</p><h2>What an active Dock site stores</h2><p>After checkout becomes available, an entitled site can store tenant-scoped receipts, audit events, and evidence on the server. Finalization creates a consistent SQLite backup. Intake Desk uses your Entra object ID, not your email address, as the account key.</p><h2>What leaves this device</h2><p>Demo actions stay local. Signed-in server actions use this product origin. Checkout is unavailable, so this page does not send billing requests. There is no analytics, advertising, or AI request.</p><h2>Your control</h2><p>Clearing browser data removes local records. Export receipts before clearing data. Contact us for account deletion or retention questions.</p><p>Questions: <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p></article>
   {:else if pathname === '/terms'}
-    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / TERMS</div><h1 id="page-title" tabindex="-1">Terms for Intake Desk.</h1><p class="lead">Use Intake Desk only for supplier records you are authorized to handle.</p><h2>Dock subscription</h2><p>Dock is $49 USD per site each month. Sociobot is the merchant of record. A canceled or revoked subscription becomes read-only; export remains available.</p><h2>Your records</h2><p>You are responsible for checking imported values, attachments, and exported records before relying on them.</p><h2>Sample use</h2><p>Reset removes demo changes and restores NB-1047. It never removes your separate workspace.</p><p>Questions: <a href="mailto:support@sociobot.in">support@sociobot.in</a>.</p></article>
+    <article class="legal" aria-labelledby="page-title"><div class="route-mark">LEGAL / TERMS</div><h1 id="page-title" tabindex="-1">Terms for Intake Desk.</h1><p class="lead">Use Intake Desk only for supplier records you are authorized to handle.</p><h2>Dock subscription</h2><p>The planned Dock price is $149 USD per site each month. Checkout is unavailable until Sociobot completes the product mapping. Sites without an active entitlement are read-only on the server; local export remains available.</p><h2>Your records</h2><p>You are responsible for checking imported values, attachments, and exported records before relying on them.</p><h2>Sample use</h2><p>Reset removes demo changes and restores NB-1047. It never removes your separate workspace.</p><p>Questions: <a href="mailto:support@sociobot.in">support@sociobot.in</a>.</p></article>
   {:else}
-    <section class="state-panel not-found" aria-labelledby="page-title"><div class="route-mark">ROUTE / 404</div><h1 id="page-title" tabindex="-1">This page missed the dock.</h1><p>The address does not match an Intake Desk page.</p><div class="sheet-actions"><a class="button primary" href="/" onclick={(event) => navigate(event, '/')}>Return home</a><a href="/demo" onclick={(event) => navigate(event, '/demo')}>Open the sample</a></div></section>
+    <section class="state-panel not-found" aria-labelledby="page-title"><div class="route-mark">ROUTE / 404</div><h1 id="page-title" tabindex="-1">This page does not exist.</h1><p>The address does not match an Intake Desk page.</p><div class="sheet-actions"><a class="button primary" href="/" onclick={(event) => navigate(event, '/')}>Return home</a><a href="/demo" onclick={(event) => navigate(event, '/demo')}>Open the sample</a></div></section>
   {/if}
 </main>
 
 <footer>
   <div><strong>Intake Desk</strong><span>Intake Desk records supplier deliveries and their exceptions.</span></div>
   <nav aria-label="Footer navigation"><a href="/privacy" onclick={(event) => navigate(event, '/privacy')}>Privacy</a><a href="/terms" onclick={(event) => navigate(event, '/terms')}>Terms</a><a href="https://sociobot.in">Built by Param Factory <span class="visually-hidden">(external site)</span></a></nav>
-  <span class="build-id">Build {buildSha.slice(0, 12)} · repair 1</span>
+  <span class="build-id">Build {buildSha.slice(0, 12)} · repair 3</span>
 </footer>
 
 <dialog bind:this={finalizeDialog} onclose={() => lastDialogTrigger?.focus()} aria-labelledby="finalize-dialog-title">

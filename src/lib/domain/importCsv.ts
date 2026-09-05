@@ -1,4 +1,4 @@
-import { multiplyDecimal, parseDecimal } from './decimal';
+import { compareDecimal, multiplyDecimal, parseDecimal } from './decimal';
 import type { DemoState, PurchaseOrderLine } from './model';
 
 const REQUIRED = ['purchase_order', 'supplier', 'packing_list', 'item_code', 'description', 'ordered', 'order_unit', 'units_per_case'];
@@ -49,7 +49,7 @@ export function importPurchaseOrderCsv(text: string): DemoState {
     const ordered = value(row, 'ordered');
     const orderUnit = value(row, 'order_unit').toLowerCase();
     const unitsPerCase = value(row, 'units_per_case');
-    if (!code || !description || !parseDecimal(ordered) || !parseDecimal(unitsPerCase)) throw new Error(`Row ${index + 2} has an invalid item or quantity.`);
+    if (!code || !description || !parseDecimal(ordered) || !parseDecimal(unitsPerCase) || compareDecimal(ordered, '0') <= 0 || compareDecimal(unitsPerCase, '0') <= 0) throw new Error(`Row ${index + 2} needs ordered and units_per_case quantities greater than zero.`);
     if (orderUnit !== 'each' && orderUnit !== 'case') throw new Error(`Row ${index + 2} order_unit must be each or case.`);
     if (seen.has(code)) throw new Error(`Row ${index + 2} repeats item ${code}.`);
     seen.add(code);

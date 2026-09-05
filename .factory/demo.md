@@ -30,7 +30,8 @@ as an empty tutorial.
 ## Isolation and reset
 
 - IndexedDB database: `intake-desk:demo:v1`.
-- Cache namespace: `intake-desk:demo-shell:<build-id>`.
+- Cache namespace: `intake-desk:demo-shell:<build-id>`. API and authenticated
+  requests bypass this cache.
 - Production storage later uses
   `intake-desk:tenant:<tenant_id>:site:<site_id>:v1`; demo code cannot open it.
 - Demo network traffic is same-origin static content only. It never calls

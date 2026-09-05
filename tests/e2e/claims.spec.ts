@@ -172,14 +172,12 @@ test('@claim:multi-po-retention importing another PO keeps an earlier finalized 
   await expect(page.getByText('Complete delivery')).toBeVisible();
 });
 
-test('@claim:dock-price-checkout states the recurring price and uses Sociobot checkout', async ({ page }) => {
+test('@claim:checkout-unavailable states the planned price without offering a broken checkout', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.pricing')).toContainText('$49');
-  const checkout = page.getByRole('link', { name: /Start Dock checkout/ });
-  await expect(checkout).toHaveAttribute('href', 'https://api.sociobot.in/api/v1/products/purchase-intake-desk/checkout?plan=dock-monthly');
-  await page.getByLabel('Restore a purchase').fill('license-example');
-  await page.getByRole('button', { name: 'Save license' }).click();
-  await expect(page.getByRole('status')).toContainText('License saved on this device');
+  await expect(page.locator('.pricing')).toContainText('$149');
+  await expect(page.locator('.pricing')).toContainText('Checkout is unavailable');
+  await expect(page.getByRole('button', { name: 'Checkout unavailable' })).toBeDisabled();
+  await expect(page.locator('a[href*="/checkout"]')).toHaveCount(0);
 });
 
 test('@claim:offline-reload keeps changed counts offline', async ({ page, context }) => {
@@ -198,13 +196,29 @@ test('@claim:offline-reload keeps changed counts offline', async ({ page, contex
 });
 
 test('@claim:demo-isolation uses only same-origin requests and demo storage', async ({ page }) => {
-  const origins = new Set<string>();
-  page.on('request', (request) => origins.add(new URL(request.url()).origin));
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
   await openReceive(page);
   await page.locator('#received-line-blt-a42').fill('44');
   const databaseNames = await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name));
   expect(databaseNames).toEqual(['intake-desk:demo:v1']);
-  expect([...origins]).toEqual([new URL(page.url()).origin]);
+  expect([...new Set(requests.map((url) => new URL(url).origin))]).toEqual([new URL(page.url()).origin]);
+  expect(requests.some((url) => new URL(url).pathname.startsWith('/api/'))).toBe(false);
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+});
+
+test('@claim:authenticated-cache-bypass never serves a cached tenant response to an authenticated request', async ({ page }) => {
+  await page.goto('/?demo=1');
+  await page.waitForFunction(() => (window as Window & { __INTAKE_SW_READY__?: boolean }).__INTAKE_SW_READY__ === true);
+  const result = await page.evaluate(async () => {
+    const cacheName = (await caches.keys()).find((name) => name.startsWith('intake-desk:demo-shell:'))!;
+    const cache = await caches.open(cacheName);
+    await cache.put('/api/v1/me', new Response(JSON.stringify({ tenant_id: 'tenant-a-secret' }), { headers: { 'Content-Type': 'application/json' } }));
+    const response = await fetch('/api/v1/me', { headers: { Authorization: 'Bearer invalid-test-token' } });
+    return { body: await response.text(), cached: await (await caches.match('/api/v1/me'))?.text() };
+  });
+  expect(result.cached).toContain('tenant-a-secret');
+  expect(result.body).not.toContain('tenant-a-secret');
 });
 
 test('@claim:scanner-manual-fallback accepts scanner and typed codes', async ({ page }) => {

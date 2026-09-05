@@ -98,11 +98,11 @@
     "sandbox": "fresh workspace; import and finalize PO-220, import PO-221, open the inbox, and open the retained PO-220 receipt"
   },
   {
-    "id": "dock-price-checkout",
-    "claim": "Dock costs $49 USD per site each month and starts at Sociobot checkout.",
-    "where": "landing Dock plan and purchase restore form",
-    "test": "npm run test:e2e -- --grep @claim:dock-price-checkout",
-    "sandbox": "fresh landing page; assert $49 recurring price, exact Sociobot checkout URL, and local license restore message"
+    "id": "checkout-unavailable",
+    "claim": "The planned Dock price is $149 USD per site each month, and checkout is unavailable until its Sociobot product mapping is complete.",
+    "where": "landing Dock plan and terms",
+    "test": "npm run test:e2e -- --grep @claim:checkout-unavailable",
+    "sandbox": "fresh landing page; assert $149 planned price, visible unavailability, disabled action, and no checkout link"
   },
   {
     "id": "phone-qr-scanning",
@@ -110,5 +110,40 @@
     "where": "receive screen phone camera scanner",
     "test": "npm run test:e2e -- --grep @claim:phone-qr-scanning",
     "sandbox": "fresh demo with a recorded BarcodeDetector/camera fixture; decode BRG-6204 and assert the matching count receives focus"
+  },
+  {
+    "id": "server-tenant-isolation",
+    "claim": "Two Dock tenants can use the same purchase-order and receipt IDs without reading or overwriting each other.",
+    "where": "server data boundary, privacy notice, README",
+    "test": "cargo test --manifest-path api/Cargo.toml tests::claim_server_tenant_isolation_same_ids_never_overwrite -- --exact",
+    "sandbox": "temporary SQLite database; create two entitled tenants, save identical PO and receipt IDs with different contents, reload each, and deny cross-site access"
+  },
+  {
+    "id": "server-record-reload",
+    "claim": "An entitled Dock site's purchase orders remain available after the server database is reopened.",
+    "where": "Dock plan, privacy notice, README",
+    "test": "cargo test --manifest-path api/Cargo.toml tests::claim_server_records_reload_after_process_reopen -- --exact",
+    "sandbox": "temporary on-disk SQLite database; save a server purchase order, close the state, reopen it, and list the original record through the authenticated handler"
+  },
+  {
+    "id": "server-audit-retention",
+    "claim": "Server finalization uses the request time, appends corrections, retrieves evidence, and writes a consistent SQLite backup.",
+    "where": "Dock plan, privacy notice, README",
+    "test": "cargo test --manifest-path api/Cargo.toml tests::claim_server_audit_uses_request_time_and_persists_after_reopen -- --exact",
+    "sandbox": "temporary entitled tenant; finalize a receipt, append a correction, retrieve uploaded evidence, inspect current timestamps, backup, and reopened database"
+  },
+  {
+    "id": "entitlement-read-only",
+    "claim": "A Dock site without an active entitlement can read and export records but cannot write server records.",
+    "where": "Dock plan, terms, README",
+    "test": "cargo test --manifest-path api/Cargo.toml tests::claim_entitlement_makes_writes_read_only_but_keeps_reads -- --exact",
+    "sandbox": "temporary unentitled site; assert PO, receipt, finalization, correction, evidence, and member writes return 402 while the inbox remains readable"
+  },
+  {
+    "id": "authenticated-cache-bypass",
+    "claim": "Authenticated API responses are never served from or added to the shared offline cache.",
+    "where": "service-worker privacy boundary and README",
+    "test": "npm run test:e2e -- --grep @claim:authenticated-cache-bypass",
+    "sandbox": "fresh browser context; poison a same-origin API cache entry, make an authorized fetch, and assert the service worker bypasses the cached tenant response"
   }
 ]

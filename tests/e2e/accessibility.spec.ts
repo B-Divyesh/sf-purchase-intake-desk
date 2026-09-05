@@ -3,15 +3,17 @@ import { expect, test } from '@playwright/test';
 
 const routes = ['/', '/start', '/demo', '/demo/purchase-orders/po-nb-1047', '/demo/receive/po-nb-1047', '/privacy', '/terms', '/404'];
 
-test('M1 routes have one heading, no overflow, and no serious axe findings', async ({ page }) => {
+test('routes have one heading, one metadata set, no overflow, and no axe findings', async ({ page }) => {
   for (const route of routes) {
     await page.goto(route);
     await expect(page.locator('main h1')).toHaveCount(1);
     await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('head meta[name="description"]')).toHaveCount(1);
+    await expect(page.locator('head link[rel="canonical"]')).toHaveCount(1);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow, `${route} must not overflow`).toBe(false);
     const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact ?? '')), `${route} axe violations`).toEqual([]);
+    expect(results.violations, `${route} axe violations`).toEqual([]);
   }
 });
 

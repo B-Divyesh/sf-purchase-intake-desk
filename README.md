@@ -23,11 +23,15 @@ that receive daily supplier deliveries but do not need a full ERP.
 - Finalize a hash-linked receipt, add corrections, and export CSV.
 - Try the full flow with an isolated West Yard sample.
 
-The no-account workspace is a local offline cache. Dock uses Sociobot Entra
-sign-in and server-owned, tenant-scoped SQLite storage for the team inbox,
-receipt audit events, evidence metadata, and backup snapshot. Dock costs **$49
-USD per site each month** through Sociobot checkout. A lapsed site remains
-read-only and can export records.
+The no-account workspace is local to one browser. An entitled Dock site uses
+Sociobot Entra sign-in and tenant-scoped SQLite storage under `/data`.
+Finalized receipts, corrections, and evidence survive a server restart. A site
+without an active entitlement is read-only on the server, while local CSV
+export remains available.
+
+The planned Dock price is **$149 USD per site each month**. Checkout is
+currently unavailable because its Sociobot product mapping is not complete.
+The site does not offer a broken payment link or accept a license meanwhile.
 
 ## Run locally
 
@@ -51,8 +55,9 @@ npm run dev:api
 
 It listens on `PORT` or 8080 and exposes `/health` and `/ready`. It boots with
 only `PORT`; it creates `/data/intake-desk.sqlite3` (or `./data` locally), WAL
-storage, object retention, and a `backup-latest.sqlite3` snapshot after each
-receipt finalization. Set `DATA_DIR` only to override the durable mount.
+storage, object retention, and a consistent `backup-latest.sqlite3` snapshot
+after each server receipt finalization. Set `DATA_DIR` only to override the
+durable mount.
 
 ## Test and build
 
@@ -67,6 +72,8 @@ cargo clippy --manifest-path api/Cargo.toml --all-targets -- -D warnings
 
 Playwright 1.58.2 runs every listed claim at desktop and 390×844. The build
 puts the web artifact in `dist/` and creates the release Rust binary.
+Backend tests create isolated temporary tenants and do not use production data
+or billing.
 
 ## Container
 
