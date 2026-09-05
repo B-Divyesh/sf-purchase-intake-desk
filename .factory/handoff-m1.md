@@ -106,3 +106,24 @@ tenant/site/membership authorization, durable receipt APIs, production
 IndexedDB outbox, idempotency and conflict handling, encrypted entitlement
 attachment, pilot Sociobot checkout/verification, `/ready`, and role/isolation
 tests. Keep the M1 demo namespace and its nine claim tests unchanged.
+
+## Repair 4 addendum — 2026-09-05
+
+The M1 demo remains the current public milestone. Repair 4 did not add a new
+product capability. It fixed the durable service readiness path used by the
+already-present server work:
+
+- Fresh `/data` now creates and checks
+  `intake-desk-rollback.sqlite3`, the rollback-journal database actually used
+  by the one-replica Azure Files deployment.
+- A temporary isolated-volume regression proves initial readiness, evidence
+  directory detection, shutdown/reopen, and persisted data.
+- The demo reset/workspace boundary now has an explicit outcome claim.
+- The hosted CIAM session claim is declared, but it is intentionally skipped
+  until an operator supplies a dedicated product account and confirms the
+  callback registration. This is an external dependency, not a completed M1
+  claim.
+
+Implementation: `64df103df5f62e428da00cd4e25d6e3f47e6cae1`. Documentation:
+`ae9873e66ea093f3aa2bf58355fe6e352dbfcb53`. The deployed image is immutable
+digest `sha256:3fb074577030ac81a821290037a004738e4c02a2935a6d53bb2c36f84382c293`.

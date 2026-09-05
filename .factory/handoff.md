@@ -1,79 +1,31 @@
-# Factory handoff — repair 3
+# Factory handoff — repair 4
 
-## Independent verification 4 — 2026-09-05
-
-**Verdict: FAIL.** Implementation `5e3cef391ac4811d9c6439ea781f875adfda9aac`
-was reviewed from documentation commit
-`79f188842b421e9cafbf12c57c4d32ad20145ea2`. All 21 declared claim commands,
-30 unit/integration tests, 42 browser checks, the production build, formatter,
-clippy, live phone/desktop flows, axe route scan, rate limiting, and Lighthouse
-passed.
-
-Three findings remain:
-
-1. A clean data directory creates `intake-desk-rollback.sqlite3`, but `/ready`
-   still checks for `intake-desk.sqlite3`; fresh start and restart both return
-   503. Production is masked by the retained old file.
-2. The README still documents the old database filename and WAL mode instead
-   of the repaired rollback-journal storage.
-3. The public hosted Entra sign-in/sign-out path is absent from
-   `.factory/claims.json` and remains untested without an operator identity.
-   The demo-reset/workspace boundary is also public and needs its own claim
-   entry, although it passed a live manual check.
-
-Fresh Lighthouse scored 98 performance, 100 accessibility, 100 best practices,
-and 100 SEO. Full evidence and earlier-finding dispositions are in
-`.factory/verification-4.md` and `.factory/evidence-verification-4/`.
-
-The external dependencies are unchanged: an operator must provide a CIAM test
-identity and confirm the callback registration; Sociobot must complete the
-recurring-product mapping before checkout is enabled.
+Date: 2026-09-05
+Controller stage: `building-m1`
+Milestone: M1 public demo and receiving workflow; no later milestone was added.
 
 ## Status
 
-Repair complete and deployed. The live implementation is commit
-`5e3cef391ac4811d9c6439ea781f875adfda9aac` at
-<https://purchase-intake-desk.sociobot.in>.
+**Deployed and verified, with one named external CIAM dependency still unverified.** The M1 job works on desktop and phone. The Dock sign-in code is configured and its hosted redirect begins correctly, but the full provider sign-in/session/sign-out claim cannot be completed without a dedicated CIAM test account and callback-registration confirmation.
 
-Dock checkout remains intentionally unavailable. The page states the planned
-$149/site/month price but offers no checkout link, token storage, or simulated
-paid state. Sociobot must complete the separate product mapping before that
-path can be enabled.
+- Implementation commit: `64df103df5f62e428da00cd4e25d6e3f47e6cae1`
+- Documentation commit: `ae9873e66ea093f3aa2bf58355fe6e352dbfcb53`
+- Live URL: <https://purchase-intake-desk.sociobot.in>
+- Live implementation image: `sociobotregistry.azurecr.io/sf-purchase-intake-desk@sha256:3fb074577030ac81a821290037a004738e4c02a2935a6d53bb2c36f84382c293`
+- Live revision: `sf-purchase-intake-desk--0000012`
 
 ## What changed
 
-- Replaced global PO, receipt, event, attachment, and entitlement keys with
-  tenant-and-site-scoped persistence. The same IDs can now exist in two
-  tenants without collision.
-- Corrected membership lookup so an existing staff member opens the assigned
-  site. Signed-in clients now reload server purchase orders, finalized
-  receipts, audit events, and retained evidence metadata.
-- Replaced fixed audit times with UTC request times. Server corrections append
-  immutable events, retrying finalization is idempotent, evidence can be
-  downloaded, and SQLite's backup API creates a consistent snapshot.
-- Enforced active entitlements on every protected write. Lapsed, revoked, or
-  expired sites remain readable and return `402 entitlement_required` for
-  writes. Export remains local and available.
-- Removed the broken production checkout call. License attachment returns a
-  clear `503 checkout_unavailable` until the external mapping exists.
-- Prevented the service worker from reading or writing `/api`, health, ready,
-  or authorized-request cache entries. Online navigation is network-first, so
-  unknown live URLs remain real HTTP 404 responses.
-- Added CIAM session restore and sign-out, one-hour discovery/JWKS caching,
-  `WWW-Authenticate: Bearer` on 401 responses, checked server errors, and
-  read-only messaging.
-- Rejected zero quantities, removed duplicate metadata, fixed the nested
-  landmark, covered the empty workspace, and made the 404 page use the shared
-  site structure and plain wording.
-- Migrated the mounted database to a rollback-journal file opened with
-  SQLite's single-process `unix-excl` VFS. The migration seeds from
-  `backup-latest.sqlite3` after an integrity check. The old WAL database and
-  sidecars remain untouched. This is compatible with the one-replica Azure
-  Files deployment.
+- `/ready` now verifies the active `/data/intake-desk-rollback.sqlite3` file, a real SQLite read/write lock, and a writable `/data/objects` evidence directory. It no longer looks for the obsolete WAL filename.
+- Added an isolated-volume integration test that starts an empty durable directory, receives readiness, detects a missing evidence directory, restarts on the same directory, and reads a persisted marker.
+- Test fixtures now use the same active rollback-journal startup path as the release service.
+- README storage instructions now name the active database and `DELETE` rollback journal.
+- Added the outcome claim proving demo reset leaves a separately imported workspace unchanged.
+- Added an explicit live hosted-CIAM claim. It runs only with an isolated test account and live origin, and reports `skipped` rather than a false pass when those external inputs are absent.
 
 ## Verification
 
-From a clean checkout of the implementation SHA:
+From a clean dependency install:
 
 ```sh
 npm ci
@@ -89,65 +41,38 @@ Results:
 
 - `npm ci`: 86 packages, 0 vulnerabilities.
 - `npm run check`: 0 errors and 0 warnings.
-- `npm test`: 17 web tests and 13 Rust unit/integration checks passed.
-- Every command in `.factory/claims.json`: 21/21 passed from the clean clone.
-- `npm run test:e2e`: 42/42 passed on desktop and 390 px phone, including axe,
-  keyboard focus, touch targets, offline reload, service-worker update, demo
-  isolation, invalid values, reset, exports, and designed 404 states.
-- Formatter and clippy: passed with warnings denied.
-- Production build: initial app JavaScript 35.00 KB gzip, CSS 5.04 KB gzip;
-  the 60.86 KB gzip CIAM chunk loads only after sign-in starts.
-
-Outcome regressions cover two tenants using the same PO/receipt IDs, a shared
-member reopening records from a fresh process, current audit times and
-correction history after reopen, entitlement read-only behavior, evidence
-retrieval, snapshot integrity, rate limiting, and authenticated cache bypass.
+- `npm test`: 17 web checks and 14 Rust checks passed.
+- `npm run test:e2e`: 44 passed across desktop and 390×844 phone; the two hosted-CIAM project executions skipped because this worker has no provider test account.
+- `npm run build`: passed; `dist/` and release binary produced.
+- Rust formatter and clippy with warnings denied: passed.
+- The fresh isolated-volume regression passed. A separately launched release binary created the rollback database and objects directory, returned 200 for health/readiness, shut down cleanly, restarted from that same directory, and returned readiness again.
+- The 23 claim entries are all declared. The 22 claims without an external identity pass; `hosted-entra-session` is an honest skip pending the named provider inputs below.
 
 ## Live evidence
 
-- Image: `sociobotregistry.azurecr.io/sf-purchase-intake-desk:5e3cef391ac4`
-- Digest: `sha256:1df8a0503303ee30153435b0905320d3e647ca21a3792677032cff3a9a6b15ef`
-- Revision: `sf-purchase-intake-desk--0000010`, healthy, 100% traffic.
-- Scale: minimum 1, maximum 1. Durable
-  `sf-purchase-intake-desk-data` is mounted at `/data`.
-- `/health` and `/ready` returned the full implementation SHA before and after
-  an explicit revision restart. The replacement replica was ready with zero
-  restarts.
-- A 100-request same-IP burst produced 90 `401` responses and 10 `429`
-  responses. Every 429 included `Retry-After`.
-- Public routes, legal pages, robots, sitemap, and `/sw.js` returned 200.
-  `/api/v1/me` returned 401 with `WWW-Authenticate` and `no-store`. The tested
-  unknown URL returned the designed page with HTTP 404.
-- Fresh desktop and phone contexts stated the job, audience, and first action
-  before scrolling. Each opened populated sample NB-1047 in one click, showed
-  the persistent demo label, changed a count, reset it to 46, used only
-  `intake-desk:demo:v1`, and sent no API request.
-- Live verification found no unexpected console error and valid title, lang,
-  one H1, main landmark, alt text, and labeled buttons.
-- Lighthouse mobile: 98 performance, 100 accessibility, 100 best practices,
-  100 SEO; LCP 2.15 s, CLS 0, total blocking time 32 ms.
+- `GET /health` and `GET /ready` each returned 200 and build `64df103df5f62e428da00cd4e25d6e3f47e6cae1` after deployment.
+- Deployment inspection confirms one replica, `/data` mounted from this product's `sf-purchase-intake-desk-data` Azure Files share, and the immutable digest above. The deployed revision retained the durable mount.
+- `/opt/fleet/lib/verify-url.sh` passed in 679 ms: title, `lang=en`, one H1, main landmark, image alt text, button labels, and console checks all passed. Desktop and 390 px screenshots are under `/work/.evidence/purchase-intake-desk-repair4/`.
+- In both fresh screenshots, before scrolling: the job is “Check deliveries against the purchase order”, the audience is small receiving teams, and the first action is “Try it with sample data”. One click showed populated Northline Bearings PO NB-1047, the persistent sample label, Reset demo, and Start for real.
+- The live browser suite passed 44 checks with the two correctly skipped hosted auth checks. Its Axe route scans cover desktop and phone public/demo/legal routes with no violations.
+- A 100-request forwarded-client burst produced 91×401 and 9×429. A separate 160-request parallel burst returned 429 with `Retry-After: 0`; after two seconds the same client was admitted and received the expected 401.
+- A live Sign in click opened the Sociobot CIAM authority with authorization code PKCE, the expected client ID, scopes, and this product's callback URI. No identity credentials were entered or logged.
 
-Evidence is in `.factory/evidence-repair-3-live/`. The full disposition of the
-previous verification findings is in `.factory/repair-3-verification.md`.
+## Earlier findings
 
-## Known limits and operator action
+| Earlier finding | Current disposition |
+| --- | --- |
+| Receipt output ignored changed counts; decimal output was inexact; impossible damage finalized | Fixed and covered by existing outcome claims. |
+| Real workspace did not retain multiple PO receipts/evidence | Fixed for the current local workspace; retention claim passes. |
+| Tenant data could collide; reopened records, audit corrections, evidence, backup, and entitlement behavior were unsafe | Fixed by tenant-scoped persistence and existing server claims. |
+| Authenticated API responses could enter shared cache; 401 lacked Bearer challenge | Fixed and covered by cache/HTTP checks. |
+| Static cache, 404, metadata, landmark, touch, camera and checkout-copy findings | Fixed or accurately represented as unavailable; browser and route checks pass. |
+| Clean durable volume never became ready | Fixed by the active-storage readiness probe and fresh-volume/restart regression. |
+| README named the obsolete SQLite file and WAL mode | Fixed in documentation commit `ae9873e`. |
+| Demo reset versus workspace boundary had no explicit claim | Fixed by `demo-reset-preserves-workspace`. |
 
-- Confirm/register
-  `https://purchase-intake-desk.sociobot.in/auth/callback` on the shared CIAM
-  SPA. No QA identity was available, so an interactive hosted sign-in was not
-  attempted. JWT validation and tenant behavior use recorded/test identities
-  only.
-- Complete the separate Sociobot recurring-product mapping before enabling
-  checkout or license attachment. No production checkout was accessed.
-- The old WAL database is retained on `/data`. The new database was seeded
-  from the latest consistent finalized-receipt snapshot. If the old deployment
-  held later unfinalized drafts, an operator should archive and inspect the old
-  files offline; this repair does not delete or guess at those records.
-- No supplier email, accounting sync, or ERP integration is claimed. Those
-  remain later product milestones.
+## External dependencies and known limits
 
-## Next step
-
-After CIAM callback and billing mapping are confirmed, run one real test-tenant
-sign-in and staging checkout, then repeat the two-tenant browser workflow. Do
-not enable production checkout before that external mapping is verified.
+1. Hosted CIAM requires an isolated product test account in `ENTRA_E2E_USERNAME` and `ENTRA_E2E_PASSWORD`, plus confirmation that `https://purchase-intake-desk.sociobot.in/auth/callback` is registered on the shared Sociobot Entra SPA. Run the documented `@claim:hosted-entra-session` command when those inputs exist. No shared production credential was used.
+2. Sociobot's recurring Dock product mapping remains incomplete. Checkout is deliberately unavailable; no payment, fake license, or direct payment path was added. The planned price remains $149 USD per site each month.
+3. Supplier email, accounting/ERP sync, and later operations work are not shipped or claimed in M1.
