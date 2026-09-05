@@ -42,6 +42,9 @@ as an empty tutorial.
 - “Start for real” leaves demo, discards demo changes, and opens `/start`.
   That route imports a real PO CSV into `intake-desk:workspace:v1`. Demo
   records are never copied into the workspace.
+- `@claim:demo-reset-preserves-workspace` imports PO-402 into the local
+  workspace, resets changed sample data, then reopens PO-402 to prove reset
+  did not alter the separate workspace namespace.
 
 ## Offline verification
 
@@ -55,3 +58,9 @@ and downloads CSV without a network request. Reconnect must not send demo data.
 Every M1 entry in `.factory/claims.json` starts from a fresh browser context
 using only this sample. Tests may change it during a case, then reset. No test
 depends on a user account, secret, external service, or another test's state.
+
+The separate `hosted-entra-session` claim is not a demo claim. It runs against
+the live product only when an operator supplies an isolated product CIAM test
+account and confirms the callback registration; see `README.md` for its exact
+environment inputs. It is deliberately reported as skipped, not passed, when
+those external inputs are unavailable.

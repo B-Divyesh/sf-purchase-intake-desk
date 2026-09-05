@@ -54,10 +54,13 @@ npm run dev:api
 ```
 
 It listens on `PORT` or 8080 and exposes `/health` and `/ready`. It boots with
-only `PORT`; it creates `/data/intake-desk.sqlite3` (or `./data` locally), WAL
-storage, object retention, and a consistent `backup-latest.sqlite3` snapshot
-after each server receipt finalization. Set `DATA_DIR` only to override the
-durable mount.
+only `PORT`; it creates `/data/intake-desk-rollback.sqlite3` (or `./data`
+locally) with SQLite's `DELETE` rollback journal. This is the active database
+for the one-replica mounted deployment. It also creates `/data/objects` for
+evidence and a consistent `backup-latest.sqlite3` snapshot after each server
+receipt finalization. `/ready` checks the open database can take a write lock
+and that the evidence directory is writable. Set `DATA_DIR` only to override
+the durable mount.
 
 ## Test and build
 
@@ -74,6 +77,26 @@ Playwright 1.58.2 runs every listed claim at desktop and 390×844. The build
 puts the web artifact in `dist/` and creates the release Rust binary.
 Backend tests create isolated temporary tenants and do not use production data
 or billing.
+
+## Hosted Entra verification
+
+The normal test suite has no identity credentials. The hosted sign-in claim is
+therefore reported as skipped unless an operator supplies a dedicated product
+test account. Do not use a shared production account.
+
+The missing provider inputs are an account username in `ENTRA_E2E_USERNAME`,
+its password in `ENTRA_E2E_PASSWORD`, and confirmation that
+`https://purchase-intake-desk.sociobot.in/auth/callback` is registered on the
+shared Sociobot Entra SPA. With those inputs, run:
+
+```sh
+ENTRA_E2E_USERNAME=... ENTRA_E2E_PASSWORD=... \
+E2E_BASE_URL=https://purchase-intake-desk.sociobot.in \
+npm run test:e2e -- --project=chromium --grep @claim:hosted-entra-session
+```
+
+The test uses a fresh Chromium profile, completes hosted sign-in, reloads to
+restore the session, and signs out. It never writes credentials to this repo.
 
 ## Container
 

@@ -1,6 +1,6 @@
 # Landing copy audit
 
-Audited: 2026-09-05 · Repair 3
+Audited: 2026-09-05 · Repair 4
 
 Method: visible landing headings, sentences, actions, facts, and footer copy
 were counted by space-separated words. Numerals and abbreviations count as one
