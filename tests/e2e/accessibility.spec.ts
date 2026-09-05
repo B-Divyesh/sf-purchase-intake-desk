@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-const routes = ['/', '/start', '/demo', '/demo/purchase-orders/po-nb-1047', '/demo/receive/po-nb-1047', '/privacy', '/terms', '/404'];
+const routes = ['/', '/start', '/app', '/demo', '/demo/purchase-orders/po-nb-1047', '/demo/receive/po-nb-1047', '/privacy', '/terms', '/404'];
 
 test('routes have one heading, one metadata set, no overflow, and no axe findings', async ({ page }) => {
   for (const route of routes) {
