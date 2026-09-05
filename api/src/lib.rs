@@ -272,6 +272,15 @@ fn write_backup(db: &Connection, data_dir: &Path) -> Result<(), String> {
     fs::rename(&pending, &latest).map_err(|error| error.to_string())
 }
 
+fn configure_sqlite(db: &Connection) -> rusqlite::Result<()> {
+    db.busy_timeout(Duration::from_secs(30))?;
+    let journal_mode: String = db.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
+    if !journal_mode.eq_ignore_ascii_case("wal") {
+        db.pragma_update(None, "journal_mode", "WAL")?;
+    }
+    Ok(())
+}
+
 fn open_state() -> AppState {
     let wanted = PathBuf::from(env::var("DATA_DIR").unwrap_or_else(|_| "/data".into()));
     let directory = if fs::create_dir_all(wanted.join("objects")).is_ok() {
@@ -283,8 +292,7 @@ fn open_state() -> AppState {
         fallback
     };
     let db = Connection::open(directory.join("intake-desk.sqlite3")).expect("open database");
-    db.pragma_update(None, "journal_mode", "WAL")
-        .expect("enable WAL");
+    configure_sqlite(&db).expect("configure database");
     create_schema(&db).expect("create schema");
     AppState {
         db: Arc::new(Mutex::new(db)),
@@ -1341,8 +1349,7 @@ mod tests {
     fn test_state_at(directory: PathBuf, identities: &[(&str, &str)]) -> AppState {
         fs::create_dir_all(directory.join("objects")).expect("test data directory");
         let db = Connection::open(directory.join("intake-desk.sqlite3")).expect("test database");
-        db.pragma_update(None, "journal_mode", "WAL")
-            .expect("test WAL");
+        configure_sqlite(&db).expect("test WAL");
         create_schema(&db).expect("test schema");
         let test_identities = identities
             .iter()
@@ -1400,6 +1407,28 @@ mod tests {
     #[test]
     fn event_hash_is_tamper_evident() {
         assert_ne!(digest(&["a", "1"]), digest(&["a", "2"]));
+    }
+
+    #[test]
+    fn existing_wal_database_reopens_while_an_old_connection_is_writing() {
+        let directory = env::temp_dir().join(format!(
+            "intake-desk-wal-reopen-{}-{}",
+            std::process::id(),
+            Uuid::new_v4()
+        ));
+        fs::create_dir_all(&directory).expect("test directory");
+        let path = directory.join("intake-desk.sqlite3");
+        let first = Connection::open(&path).expect("first database connection");
+        configure_sqlite(&first).expect("initial WAL configuration");
+        first
+            .execute_batch("CREATE TABLE held(value TEXT); BEGIN IMMEDIATE; INSERT INTO held VALUES('old revision');")
+            .expect("held write transaction");
+
+        let replacement = Connection::open(&path).expect("replacement database connection");
+        configure_sqlite(&replacement).expect("reuse existing WAL mode without a write lock");
+
+        first.execute_batch("ROLLBACK").expect("release test lock");
+        fs::remove_dir_all(directory).expect("remove test database");
     }
 
     #[test]
