@@ -1,5 +1,34 @@
 # Factory handoff — repair 3
 
+## Independent verification 4 — 2026-09-05
+
+**Verdict: FAIL.** Implementation `5e3cef391ac4811d9c6439ea781f875adfda9aac`
+was reviewed from documentation commit
+`79f188842b421e9cafbf12c57c4d32ad20145ea2`. All 21 declared claim commands,
+30 unit/integration tests, 42 browser checks, the production build, formatter,
+clippy, live phone/desktop flows, axe route scan, rate limiting, and Lighthouse
+passed.
+
+Three findings remain:
+
+1. A clean data directory creates `intake-desk-rollback.sqlite3`, but `/ready`
+   still checks for `intake-desk.sqlite3`; fresh start and restart both return
+   503. Production is masked by the retained old file.
+2. The README still documents the old database filename and WAL mode instead
+   of the repaired rollback-journal storage.
+3. The public hosted Entra sign-in/sign-out path is absent from
+   `.factory/claims.json` and remains untested without an operator identity.
+   The demo-reset/workspace boundary is also public and needs its own claim
+   entry, although it passed a live manual check.
+
+Fresh Lighthouse scored 98 performance, 100 accessibility, 100 best practices,
+and 100 SEO. Full evidence and earlier-finding dispositions are in
+`.factory/verification-4.md` and `.factory/evidence-verification-4/`.
+
+The external dependencies are unchanged: an operator must provide a CIAM test
+identity and confirm the callback registration; Sociobot must complete the
+recurring-product mapping before checkout is enabled.
+
 ## Status
 
 Repair complete and deployed. The live implementation is commit

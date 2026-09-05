@@ -1,0 +1,14 @@
+{
+  "url": "https://purchase-intake-desk.sociobot.in",
+  "loadMs": 610,
+  "errors": [],
+  "a11y": {
+    "title": "Intake Desk — check supplier deliveries",
+    "lang": "en",
+    "h1": 1,
+    "main": true,
+    "imgsMissingAlt": 0,
+    "buttonsUnlabeled": 0,
+    "textLength": 1701
+  }
+}
