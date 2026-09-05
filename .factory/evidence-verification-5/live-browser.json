@@ -1,0 +1,77 @@
+[
+  {
+    "profile": "desktop",
+    "first": {
+      "title": "Intake Desk — check supplier deliveries",
+      "h1": "Check deliveries against the purchase order.",
+      "audience": "For small receiving teams that need a clear record before the supplier van leaves.",
+      "action": "Try it with sample data",
+      "h1Visible": true,
+      "audienceVisible": true,
+      "actionVisible": true,
+      "scrollY": 0
+    },
+    "sample": {
+      "heading": "Count the delivery.",
+      "banner": "Demo — sample data, nothing is saved\nChanges stay in this browser.\nReset demo\nStart for real",
+      "values": {
+        "bearing": "120",
+        "belts": "46",
+        "seals": "24"
+      },
+      "rowText": "BRG-6204\nDeep-groove bearing\nMatched\n\n120 each expected\n\nReceived, each\n−\n+\nCondition\nGood\nDamaged\nBLT-A42\nA42 drive belt\n2 each short\n\n4 cases × 12 = 48 each expected\n\nReceived, each\n−\n+\nCondition\nGood\nDamaged\nDiscrepancy note\nSEAL-28\n28 mm shaft seal\n1 damaged\n\n24 each expected\n\nReceived, each\n−\n+\nCondition\nGood\nDamaged\nDamaged, each\nDiscrepancy note"
+    },
+    "resetBelts": "46",
+    "databases": [
+      "intake-desk:demo:v1"
+    ],
+    "requestOrigins": [
+      "https://purchase-intake-desk.sociobot.in"
+    ],
+    "apiRequests": [],
+    "errors": [],
+    "runningAnimations": 0
+  },
+  {
+    "profile": "phone",
+    "first": {
+      "title": "Intake Desk — check supplier deliveries",
+      "h1": "Check deliveries against the purchase order.",
+      "audience": "For small receiving teams that need a clear record before the supplier van leaves.",
+      "action": "Try it with sample data",
+      "h1Visible": true,
+      "audienceVisible": true,
+      "actionVisible": true,
+      "scrollY": 0
+    },
+    "sample": {
+      "heading": "Count the delivery.",
+      "banner": "Demo — sample data, nothing is saved\nChanges stay in this browser.\nReset demo\nStart for real",
+      "values": {
+        "bearing": "120",
+        "belts": "46",
+        "seals": "24"
+      },
+      "rowText": "BRG-6204\nDeep-groove bearing\nMatched\n\n120 each expected\n\nReceived, each\n−\n+\nCondition\nGood\nDamaged\nBLT-A42\nA42 drive belt\n2 each short\n\n4 cases × 12 = 48 each expected\n\nReceived, each\n−\n+\nCondition\nGood\nDamaged\nDiscrepancy note\nSEAL-28\n28 mm shaft seal\n1 damaged\n\n24 each expected\n\nReceived, each\n−\n+\nCondition\nGood\nDamaged\nDamaged, each\nDiscrepancy note"
+    },
+    "resetBelts": "46",
+    "databases": [
+      "intake-desk:demo:v1"
+    ],
+    "requestOrigins": [
+      "https://purchase-intake-desk.sociobot.in"
+    ],
+    "apiRequests": [],
+    "errors": [],
+    "runningAnimations": 0
+  },
+  {
+    "keyboard": {
+      "firstFocus": "Skip to main content",
+      "afterSkip": {
+        "tag": "MAIN",
+        "id": "main"
+      }
+    }
+  }
+]

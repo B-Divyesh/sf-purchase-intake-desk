@@ -1,0 +1,75 @@
+{
+  "invalid": {
+    "zeroError": "The purchase order was not imported\nRow 2 needs ordered and units_per_case quantities greater than zero.",
+    "zeroFocused": true,
+    "exactValue": "50 each",
+    "evidenceError": "Check this receipt\nThe evidence file content does not match its file type.",
+    "unknownError": "Check this receipt\nUNKNOWN-99 is not on NB-1047. Check the packing list or choose a line below.",
+    "errors": []
+  },
+  "dark": [
+    {
+      "route": "/",
+      "status": 200,
+      "title": "Intake Desk — check supplier deliveries",
+      "h1": "Check deliveries against the purchase order.",
+      "violations": [],
+      "overflow": false,
+      "runningAnimations": 0
+    },
+    {
+      "route": "/demo",
+      "status": 200,
+      "title": "Demo — Intake Desk",
+      "h1": "Find the delivery.",
+      "violations": [],
+      "overflow": false,
+      "runningAnimations": 0
+    },
+    {
+      "route": "/demo/receive/po-nb-1047",
+      "status": 200,
+      "title": "Receive delivery — Intake Desk",
+      "h1": "Count the delivery.",
+      "violations": [],
+      "overflow": false,
+      "runningAnimations": 0
+    },
+    {
+      "route": "/privacy",
+      "status": 200,
+      "title": "Privacy — Intake Desk",
+      "h1": "Know where receiving data is stored.",
+      "violations": [],
+      "overflow": false,
+      "runningAnimations": 0
+    },
+    {
+      "route": "/terms",
+      "status": 200,
+      "title": "Terms — Intake Desk",
+      "h1": "Terms for Intake Desk.",
+      "violations": [],
+      "overflow": false,
+      "runningAnimations": 0
+    },
+    {
+      "route": "/not-a-real-route",
+      "status": 404,
+      "title": "Page not found — Intake Desk",
+      "h1": "This page does not exist.",
+      "violations": [],
+      "overflow": false,
+      "runningAnimations": 0
+    }
+  ],
+  "narrow": {
+    "overflow": false,
+    "h1": "Count the delivery."
+  },
+  "text200": {
+    "overflow": false,
+    "finalizeVisible": true,
+    "bannerVisible": true
+  }
+}
