@@ -17,7 +17,7 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{SecondsFormat, Utc};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -257,7 +257,8 @@ fn write_backup(db: &Connection, data_dir: &Path) -> Result<(), String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.to_string()),
     }
-    let mut destination = Connection::open(&pending).map_err(|error| error.to_string())?;
+    let mut destination = open_network_sqlite(&pending).map_err(|error| error.to_string())?;
+    configure_sqlite(&destination).map_err(|error| error.to_string())?;
     {
         let backup = rusqlite::backup::Backup::new(db, &mut destination)
             .map_err(|error| error.to_string())?;
@@ -277,6 +278,10 @@ fn configure_sqlite(db: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+fn open_network_sqlite(path: &Path) -> rusqlite::Result<Connection> {
+    Connection::open_with_flags_and_vfs(path, OpenFlags::default(), "unix-excl")
+}
+
 fn seed_network_safe_database(directory: &Path, destination_path: &Path) -> Result<(), String> {
     let backup_path = directory.join("backup-latest.sqlite3");
     let pending = directory.join(format!(
@@ -287,7 +292,7 @@ fn seed_network_safe_database(directory: &Path, destination_path: &Path) -> Resu
         fs::copy(&backup_path, &pending).map_err(|error| error.to_string())?;
         warn!("seeding network-safe database from the latest consistent backup");
     }
-    let destination = Connection::open(&pending).map_err(|error| error.to_string())?;
+    let destination = open_network_sqlite(&pending).map_err(|error| error.to_string())?;
     configure_sqlite(&destination).map_err(|error| error.to_string())?;
     let integrity: String = destination
         .query_row("PRAGMA integrity_check", [], |row| row.get(0))
@@ -308,7 +313,7 @@ fn open_persistent_database(directory: &Path) -> Result<Connection, String> {
     if !rollback_path.exists() {
         seed_network_safe_database(directory, &rollback_path)?;
     }
-    let db = Connection::open(&rollback_path).map_err(|error| error.to_string())?;
+    let db = open_network_sqlite(&rollback_path).map_err(|error| error.to_string())?;
     configure_sqlite(&db).map_err(|error| error.to_string())?;
     create_schema(&db).map_err(|error| error.to_string())?;
     Ok(db)
