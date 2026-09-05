@@ -274,10 +274,6 @@ fn write_backup(db: &Connection, data_dir: &Path) -> Result<(), String> {
 
 fn configure_sqlite(db: &Connection) -> rusqlite::Result<()> {
     db.busy_timeout(Duration::from_secs(30))?;
-    let journal_mode: String = db.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
-    if !journal_mode.eq_ignore_ascii_case("wal") {
-        db.pragma_update(None, "journal_mode", "WAL")?;
-    }
     Ok(())
 }
 
@@ -1410,7 +1406,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_wal_database_reopens_while_an_old_connection_is_writing() {
+    fn database_configuration_does_not_require_a_journal_mode_write_lock() {
         let directory = env::temp_dir().join(format!(
             "intake-desk-wal-reopen-{}-{}",
             std::process::id(),
@@ -1419,13 +1415,13 @@ mod tests {
         fs::create_dir_all(&directory).expect("test directory");
         let path = directory.join("intake-desk.sqlite3");
         let first = Connection::open(&path).expect("first database connection");
-        configure_sqlite(&first).expect("initial WAL configuration");
+        configure_sqlite(&first).expect("initial database configuration");
         first
             .execute_batch("CREATE TABLE held(value TEXT); BEGIN IMMEDIATE; INSERT INTO held VALUES('old revision');")
             .expect("held write transaction");
 
         let replacement = Connection::open(&path).expect("replacement database connection");
-        configure_sqlite(&replacement).expect("reuse existing WAL mode without a write lock");
+        configure_sqlite(&replacement).expect("configure without a journal mode write lock");
 
         first.execute_batch("ROLLBACK").expect("release test lock");
         fs::remove_dir_all(directory).expect("remove test database");
