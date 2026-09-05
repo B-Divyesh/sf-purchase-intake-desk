@@ -1,0 +1,14 @@
+HTTP/2 401 
+content-type: application/json
+www-authenticate: Bearer realm="Intake Desk"
+x-ratelimit-limit: 40
+x-ratelimit-remaining: 36
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+content-security-policy: default-src 'self'; base-uri 'self'; connect-src 'self' https://sociobotcustomers.ciamlogin.com https://api.sociobot.in; font-src 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self'
+strict-transport-security: max-age=31536000; includeSubDomains
+permissions-policy: camera=(self), microphone=(), geolocation=()
+cache-control: no-cache, no-store, must-revalidate
+content-length: 83
+date: Sat, 05 Sep 2026 20:52:18 GMT
+

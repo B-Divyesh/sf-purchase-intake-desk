@@ -1,0 +1,5 @@
+Revision restart: sf-purchase-intake-desk--0000010
+Replacement replica: sf-purchase-intake-desk--0000010-d7984c78-6dgdd
+State after 20 seconds: running, ready, zero restarts
+Health: 200, build_sha 5e3cef391ac4811d9c6439ea781f875adfda9aac
+Ready: 200, build_sha 5e3cef391ac4811d9c6439ea781f875adfda9aac

@@ -1,84 +1,50 @@
-# Factory handoff — independent verification 3
-
-## Release status
-
-**FAIL — do not release commit `ee012af218c7a77894ef11997f60f8c261c29943`.**
-
-Fresh verification tested the exact deployed candidate at
-<https://purchase-intake-desk.sociobot.in>. The deployment identity, all 16
-listed claim commands, the 40-test browser suite, unit/API tests, type checks,
-production build, accessibility baseline, offline demo, rate limiting, and
-performance budgets pass.
-
-Release remains blocked because the live Dock checkout returns HTTP 404; the
-paid/team client cannot load server records; global PO/receipt identifiers permit
-cross-tenant overwrite; server timestamps are hard-coded; corrections,
-entitlements, retrieval, and backup guarantees are incomplete; and the service
-worker can cache authenticated GET responses in a shared build cache. The page
-also advertises $49/site/month while the supplied researched brief specifies
-$149/site/month.
-
-The full evidence, severity-ranked defects, commands, performance numbers, and
-required next verification are in [verification-3.md](./verification-3.md).
-Evidence is in `evidence-verification-3/`.
-
-## Verification 3 summary
-
-- Candidate/live identity: exact SHA `ee012af218c7a77894ef11997f60f8c261c29943`.
-- Claims: 16/16 commands pass on desktop and 390 px phone.
-- First read: PASS; plain job, audience, and one-click sample are visible.
-- Local gates: check, unit/API tests, 40 Playwright tests, build, fmt, clippy all pass.
-- Live Lighthouse: 94 performance, 100 accessibility, 100 best practices,
-  100 SEO; LCP 2.24 s; CLS 0.
-- Live rate allowance: 40-request burst, 20 requests/second refill; 500-request
-  HTTP/2 burst produced 459 responses with 429 and `Retry-After`.
-- Auth authority: correct Sociobot CIAM tenant; full account login was not
-  possible without a QA identity.
-- Docker image build: not run because Docker is unavailable in this worker;
-  the exact web and Rust production builds pass.
-
----
-
-# Prior builder handoff — repair 2
+# Factory handoff — repair 3
 
 ## Status
 
-Repair of verifier report `2f9ceacd7ad65d9105495224a53a59f7bbc2dc85`.
+Repair complete and deployed. The live implementation is commit
+`5e3cef391ac4811d9c6439ea781f875adfda9aac` at
+<https://purchase-intake-desk.sociobot.in>.
 
-The decisive overwrite was reproduced before changing code: the old adapter
-wrote every real PO to IndexedDB key `active-purchase-order`; importing PO-221
-therefore replaced finalized PO-220. The adapter is now an IDB inbox keyed by
-purchase-order ID, migrates the old single record once, and retains each local
-receipt. Regression: `@claim:multi-po-retention` imports/finalizes PO-220,
-imports PO-221, opens the inbox, then reopens the PO-220 receipt on desktop and
-390 px mobile.
+Dock checkout remains intentionally unavailable. The page states the planned
+$149/site/month price but offers no checkout link, token storage, or simulated
+paid state. Sociobot must complete the separate product mapping before that
+path can be enabled.
 
 ## What changed
 
-- Added a server-owned SQLite/WAL model at `DATA_DIR/intake-desk.sqlite3` for
-  tenants, sites, memberships, POs, receipts, append-only hash-chain events,
-  attachment metadata, idempotency records, and entitlement fingerprints.
-  Finalization writes a `backup-latest.sqlite3` snapshot; retained evidence is
-  content-addressed under `DATA_DIR/objects`.
-- Added protected `/api/v1` PO, receipt, finalization, evidence, membership,
-  `/me`, and billing-attach routes. Every tenant query is membership scoped;
-  the unit regression proves one user cannot access another site.
-- Added Sociobot Entra External ID sign-in with MSAL PKCE/session storage and
-  server verification of RS256 JWT signature/JWKS, discovery issuer, audience,
-  tenant ID, expiry, and not-before. The stable `oid` is the server key.
-- Replaced the permission probe with real `BarcodeDetector` QR/barcode camera
-  scanning, an accessible live video dialog, and a keyboard/typed fallback.
-- Replaced the unimplemented $149 copy with the controller-approved **$49 per
-  site/month** recurring Dock checkout link, local restore field, server-side
-  Sociobot verification, and entitlement fingerprint storage. The researched
-  brief remains unchanged; its historic $149 hypothesis is not product copy.
-- Updated privacy, terms, README, Docker persistent `/data` configuration,
-  CSP, copy audit, and claims. Demo remains isolated and sends no auth,
-  billing, or API requests.
+- Replaced global PO, receipt, event, attachment, and entitlement keys with
+  tenant-and-site-scoped persistence. The same IDs can now exist in two
+  tenants without collision.
+- Corrected membership lookup so an existing staff member opens the assigned
+  site. Signed-in clients now reload server purchase orders, finalized
+  receipts, audit events, and retained evidence metadata.
+- Replaced fixed audit times with UTC request times. Server corrections append
+  immutable events, retrying finalization is idempotent, evidence can be
+  downloaded, and SQLite's backup API creates a consistent snapshot.
+- Enforced active entitlements on every protected write. Lapsed, revoked, or
+  expired sites remain readable and return `402 entitlement_required` for
+  writes. Export remains local and available.
+- Removed the broken production checkout call. License attachment returns a
+  clear `503 checkout_unavailable` until the external mapping exists.
+- Prevented the service worker from reading or writing `/api`, health, ready,
+  or authorized-request cache entries. Online navigation is network-first, so
+  unknown live URLs remain real HTTP 404 responses.
+- Added CIAM session restore and sign-out, one-hour discovery/JWKS caching,
+  `WWW-Authenticate: Bearer` on 401 responses, checked server errors, and
+  read-only messaging.
+- Rejected zero quantities, removed duplicate metadata, fixed the nested
+  landmark, covered the empty workspace, and made the 404 page use the shared
+  site structure and plain wording.
+- Migrated the mounted database to a rollback-journal file opened with
+  SQLite's single-process `unix-excl` VFS. The migration seeds from
+  `backup-latest.sqlite3` after an integrity check. The old WAL database and
+  sidecars remain untouched. This is compatible with the one-replica Azure
+  Files deployment.
 
 ## Verification
 
-Run from a clean checkout:
+From a clean checkout of the implementation SHA:
 
 ```sh
 npm ci
@@ -90,43 +56,69 @@ cargo fmt --manifest-path api/Cargo.toml -- --check
 cargo clippy --manifest-path api/Cargo.toml --all-targets -- -D warnings
 ```
 
-Completed locally during this repair: type check; 16 web unit tests; 7 Rust
-unit/integration tests; formatter; clippy; production build; all 40 Playwright
-desktop/390 px tests; the added regressions for multi-PO retention, $49
-checkout/restore, and fixture-backed phone QR scanning; and a release-binary
-`PORT`-only `/health` + `/ready` smoke test. The initial application bundle is 34.47 KB gzip; the MSAL
-chunk is loaded only after pressing Sign in (60.82 KB gzip).
+Results:
 
-Run the production service locally with only `PORT` (it falls back to `./data`
-if `/data` is not writable):
+- `npm ci`: 86 packages, 0 vulnerabilities.
+- `npm run check`: 0 errors and 0 warnings.
+- `npm test`: 17 web tests and 13 Rust unit/integration checks passed.
+- Every command in `.factory/claims.json`: 21/21 passed from the clean clone.
+- `npm run test:e2e`: 42/42 passed on desktop and 390 px phone, including axe,
+  keyboard focus, touch targets, offline reload, service-worker update, demo
+  isolation, invalid values, reset, exports, and designed 404 states.
+- Formatter and clippy: passed with warnings denied.
+- Production build: initial app JavaScript 35.00 KB gzip, CSS 5.04 KB gzip;
+  the 60.86 KB gzip CIAM chunk loads only after sign-in starts.
 
-```sh
-npm run build
-PORT=8080 STATIC_DIR=dist api/target/release/intake-desk-api
-curl http://localhost:8080/health
-curl http://localhost:8080/ready
-```
+Outcome regressions cover two tenants using the same PO/receipt IDs, a shared
+member reopening records from a fresh process, current audit times and
+correction history after reopen, entitlement read-only behavior, evidence
+retrieval, snapshot integrity, rate limiting, and authenticated cache bypass.
 
-## Needs operator action
+## Live evidence
 
-- Confirm/register `https://purchase-intake-desk.sociobot.in/auth/callback` on
-  the shared CIAM SPA application `25c704f4-465a-47af-80ab-2c489466b697`.
-  The redirect cannot be verified without a real tenant member.
-- Register/confirm the recurring `$49` product configuration for
-  `purchase-intake-desk` in Sociobot billing. The app uses only Sociobot hosted
-  checkout and verification; it has no payment-provider secret.
-- Mount durable `/data` storage for the container. Container Apps' default
-  ephemeral filesystem is unsuitable for the database, object retention, and
-  backup snapshot; verify the deployment has a persistent volume before
-  treating Dock records as retained.
+- Image: `sociobotregistry.azurecr.io/sf-purchase-intake-desk:5e3cef391ac4`
+- Digest: `sha256:1df8a0503303ee30153435b0905320d3e647ca21a3792677032cff3a9a6b15ef`
+- Revision: `sf-purchase-intake-desk--0000010`, healthy, 100% traffic.
+- Scale: minimum 1, maximum 1. Durable
+  `sf-purchase-intake-desk-data` is mounted at `/data`.
+- `/health` and `/ready` returned the full implementation SHA before and after
+  an explicit revision restart. The replacement replica was ready with zero
+  restarts.
+- A 100-request same-IP burst produced 90 `401` responses and 10 `429`
+  responses. Every 429 included `Retry-After`.
+- Public routes, legal pages, robots, sitemap, and `/sw.js` returned 200.
+  `/api/v1/me` returned 401 with `WWW-Authenticate` and `no-store`. The tested
+  unknown URL returned the designed page with HTTP 404.
+- Fresh desktop and phone contexts stated the job, audience, and first action
+  before scrolling. Each opened populated sample NB-1047 in one click, showed
+  the persistent demo label, changed a count, reset it to 46, used only
+  `intake-desk:demo:v1`, and sent no API request.
+- Live verification found no unexpected console error and valid title, lang,
+  one H1, main landmark, alt text, and labeled buttons.
+- Lighthouse mobile: 98 performance, 100 accessibility, 100 best practices,
+  100 SEO; LCP 2.15 s, CLS 0, total blocking time 32 ms.
 
-## Deployment evidence
+Evidence is in `.factory/evidence-repair-3-live/`. The full disposition of the
+previous verification findings is in `.factory/repair-3-verification.md`.
 
-- Commit: `d10fb58` (`fix: retain team purchase orders and enable dock workflow`)
-- ACR build: `sociobotregistry.azurecr.io/sf-purchase-intake-desk:d10fb58`,
-  digest `sha256:da26c910001ea8412c11418a40f1a99590e5dae12ef8edd2e4e7d6dc45ef21f5`
-- Container App revision: `sf-purchase-intake-desk--d10fb58`, healthy with
-  100% traffic.
-- Verified after rollout on both the Container App FQDN and
-  `https://purchase-intake-desk.sociobot.in`: `/health` returned build SHA
-  `d10fb58`; `/ready` returned `{"status":"ready"}`.
+## Known limits and operator action
+
+- Confirm/register
+  `https://purchase-intake-desk.sociobot.in/auth/callback` on the shared CIAM
+  SPA. No QA identity was available, so an interactive hosted sign-in was not
+  attempted. JWT validation and tenant behavior use recorded/test identities
+  only.
+- Complete the separate Sociobot recurring-product mapping before enabling
+  checkout or license attachment. No production checkout was accessed.
+- The old WAL database is retained on `/data`. The new database was seeded
+  from the latest consistent finalized-receipt snapshot. If the old deployment
+  held later unfinalized drafts, an operator should archive and inspect the old
+  files offline; this repair does not delete or guess at those records.
+- No supplier email, accounting sync, or ERP integration is claimed. Those
+  remain later product milestones.
+
+## Next step
+
+After CIAM callback and billing mapping are confirmed, run one real test-tenant
+sign-in and staging checkout, then repeat the two-tenant browser workflow. Do
+not enable production checkout before that external mapping is verified.

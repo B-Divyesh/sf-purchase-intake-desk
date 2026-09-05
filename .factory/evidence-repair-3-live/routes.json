@@ -1,0 +1,72 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "title": "Intake Desk — check supplier deliveries",
+    "h1": "Check deliveries against the purchase order.",
+    "main": 1,
+    "description": 1,
+    "canonical": 1,
+    "errors": []
+  },
+  {
+    "path": "/demo",
+    "status": 200,
+    "title": "Demo — Intake Desk",
+    "h1": "Find the delivery.",
+    "main": 1,
+    "description": 1,
+    "canonical": 1,
+    "errors": []
+  },
+  {
+    "path": "/start",
+    "status": 200,
+    "title": "Import a purchase order — Intake Desk",
+    "h1": "Import a purchase order.",
+    "main": 1,
+    "description": 1,
+    "canonical": 1,
+    "errors": []
+  },
+  {
+    "path": "/app",
+    "status": 200,
+    "title": "Purchase orders — Intake Desk",
+    "h1": "Import your first purchase order.",
+    "main": 1,
+    "description": 1,
+    "canonical": 1,
+    "errors": []
+  },
+  {
+    "path": "/privacy",
+    "status": 200,
+    "title": "Privacy — Intake Desk",
+    "h1": "Know where receiving data is stored.",
+    "main": 1,
+    "description": 1,
+    "canonical": 1,
+    "errors": []
+  },
+  {
+    "path": "/terms",
+    "status": 200,
+    "title": "Terms — Intake Desk",
+    "h1": "Terms for Intake Desk.",
+    "main": 1,
+    "description": 1,
+    "canonical": 1,
+    "errors": []
+  },
+  {
+    "path": "/404",
+    "status": 404,
+    "title": "Page not found — Intake Desk",
+    "h1": "This page does not exist.",
+    "main": 1,
+    "description": 1,
+    "canonical": 1,
+    "errors": []
+  }
+]

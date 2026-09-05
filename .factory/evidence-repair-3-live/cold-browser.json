@@ -1,0 +1,36 @@
+[
+  {
+    "device": "desktop",
+    "homeStatus": 200,
+    "h1": "Check deliveries against the purchase order.",
+    "audience": "For small receiving teams that need a clear record before the supplier van leaves.",
+    "action": true,
+    "populated": true,
+    "banner": true,
+    "resetValue": "46",
+    "databases": [
+      "intake-desk:demo:v1"
+    ],
+    "apiRequests": [],
+    "missingStatus": 404,
+    "missingH1": "This page does not exist.",
+    "unexpectedConsoleErrors": []
+  },
+  {
+    "device": "phone",
+    "homeStatus": 200,
+    "h1": "Check deliveries against the purchase order.",
+    "audience": "For small receiving teams that need a clear record before the supplier van leaves.",
+    "action": true,
+    "populated": true,
+    "banner": true,
+    "resetValue": "46",
+    "databases": [
+      "intake-desk:demo:v1"
+    ],
+    "apiRequests": [],
+    "missingStatus": 404,
+    "missingH1": "This page does not exist.",
+    "unexpectedConsoleErrors": []
+  }
+]
