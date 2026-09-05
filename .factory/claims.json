@@ -98,6 +98,20 @@
     "sandbox": "fresh workspace; import and finalize PO-220, import PO-221, open the inbox, and open the retained PO-220 receipt"
   },
   {
+    "id": "demo-reset-preserves-workspace",
+    "claim": "Resetting the demo does not change a separate local workspace.",
+    "where": "demo banner, terms, README",
+    "test": "npm run test:e2e -- --grep @claim:demo-reset-preserves-workspace",
+    "sandbox": "fresh browser; import PO-402 to the workspace, change and reset the sample, then reopen PO-402 with its 30-each quantity unchanged"
+  },
+  {
+    "id": "hosted-entra-session",
+    "claim": "A Dock user can sign in with Sociobot Entra, restore the session, and sign out on this device.",
+    "where": "sign-in button, README",
+    "test": "ENTRA_E2E_USERNAME=<isolated CIAM test account> ENTRA_E2E_PASSWORD=<test account password> E2E_BASE_URL=https://purchase-intake-desk.sociobot.in npm run test:e2e -- --project=chromium --grep @claim:hosted-entra-session",
+    "sandbox": "fresh Chromium profile against the live product; use an isolated product CIAM test account, complete hosted sign-in and callback, reload to restore the session, then sign out"
+  },
+  {
     "id": "checkout-unavailable",
     "claim": "The planned Dock price is $149 USD per site each month, and checkout is unavailable until its Sociobot product mapping is complete.",
     "where": "landing Dock plan and terms",

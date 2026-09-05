@@ -172,6 +172,61 @@ test('@claim:multi-po-retention importing another PO keeps an earlier finalized 
   await expect(page.getByText('Complete delivery')).toBeVisible();
 });
 
+test('@claim:demo-reset-preserves-workspace resetting the sample leaves a separate workspace unchanged', async ({ page }) => {
+  await page.goto('/start');
+  await page.getByLabel('Purchase order CSV').setInputFiles({
+    name: 'po-402.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('purchase_order,supplier,packing_list,item_code,description,ordered,order_unit,units_per_case\nPO-402,Quay Parts,QP-402,CLAMP-4,Steel clamp,3,case,10'),
+  });
+  await page.getByRole('button', { name: 'Check and import PO' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Review PO-402.');
+
+  await page.goto('/demo?demo=1');
+  await page.getByRole('link', { name: /Northline Bearings/ }).click();
+  await page.getByRole('link', { name: 'Count this delivery' }).click();
+  await page.locator('#received-line-blt-a42').fill('41');
+  await page.getByRole('button', { name: 'Reset demo' }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Reset demo' }).click();
+  await expect(page).toHaveURL(/\/demo\?demo=1$/);
+
+  await page.goto('/app');
+  await expect(page.getByRole('link', { name: /PO-402/ })).toBeVisible();
+  await page.getByRole('link', { name: /PO-402/ }).click();
+  await expect(page.getByText('30 each')).toBeVisible();
+});
+
+test('@claim:hosted-entra-session sign-in restores a Dock session and sign-out clears it', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium', 'Run the hosted account once in the chromium project.');
+  const username = process.env.ENTRA_E2E_USERNAME;
+  const password = process.env.ENTRA_E2E_PASSWORD;
+  const baseURL = process.env.E2E_BASE_URL;
+  test.skip(
+    !username || !password || !baseURL,
+    'Requires ENTRA_E2E_USERNAME, ENTRA_E2E_PASSWORD, and E2E_BASE_URL for an isolated CIAM test account.',
+  );
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForURL(/sociobotcustomers\.ciamlogin\.com/, { timeout: 30_000 });
+  const usernameInput = page.locator('input[name="loginfmt"], input[type="email"]').first();
+  await expect(usernameInput).toBeVisible({ timeout: 30_000 });
+  await usernameInput.fill(username!);
+  await page.locator('#idSIButton9, button[type="submit"], input[type="submit"]').first().click();
+  const passwordInput = page.locator('input[name="passwd"], input[type="password"]').first();
+  await expect(passwordInput).toBeVisible({ timeout: 30_000 });
+  await passwordInput.fill(password!);
+  await page.locator('#idSIButton9, button[type="submit"], input[type="submit"]').first().click();
+  await page.waitForURL(/\/app(?:$|\?)/, { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.waitForURL(new RegExp(`^${baseURL!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?(?:\\?.*)?$`), { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+});
+
 test('@claim:checkout-unavailable states the planned price without offering a broken checkout', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.pricing')).toContainText('$149');

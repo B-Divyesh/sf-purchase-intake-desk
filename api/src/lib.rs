@@ -44,10 +44,12 @@ use uuid::Uuid;
 const TENANT_ID: &str = "35c6fe40-0ec0-46b6-98c6-213ad4de6650";
 const CLIENT_ID: &str = "25c704f4-465a-47af-80ab-2c489466b697";
 const SUBDOMAIN: &str = "sociobotcustomers";
+const ACTIVE_DATABASE_FILE: &str = "intake-desk-rollback.sqlite3";
 #[derive(Clone)]
 struct AppState {
     db: Arc<Mutex<Connection>>,
     data_dir: PathBuf,
+    database_path: PathBuf,
     auth: AuthVerifier,
     #[cfg(test)]
     test_identities: Arc<HashMap<String, Identity>>,
@@ -309,7 +311,7 @@ fn seed_network_safe_database(directory: &Path, destination_path: &Path) -> Resu
 }
 
 fn open_persistent_database(directory: &Path) -> Result<Connection, String> {
-    let rollback_path = directory.join("intake-desk-rollback.sqlite3");
+    let rollback_path = directory.join(ACTIVE_DATABASE_FILE);
     if !rollback_path.exists() {
         seed_network_safe_database(directory, &rollback_path)?;
     }
@@ -319,19 +321,12 @@ fn open_persistent_database(directory: &Path) -> Result<Connection, String> {
     Ok(db)
 }
 
-fn open_state() -> AppState {
-    let wanted = PathBuf::from(env::var("DATA_DIR").unwrap_or_else(|_| "/data".into()));
-    let directory = if fs::create_dir_all(wanted.join("objects")).is_ok() {
-        wanted
-    } else {
-        warn!("DATA_DIR unavailable; using ./data");
-        let fallback = PathBuf::from("data");
-        fs::create_dir_all(fallback.join("objects")).expect("create data directory");
-        fallback
-    };
+fn open_state_at(directory: PathBuf) -> AppState {
+    fs::create_dir_all(directory.join("objects")).expect("create data directory");
     let db = open_persistent_database(&directory).expect("open persistent database");
     AppState {
         db: Arc::new(Mutex::new(db)),
+        database_path: directory.join(ACTIVE_DATABASE_FILE),
         data_dir: directory,
         auth: AuthVerifier {
             client: reqwest::Client::new(),
@@ -339,6 +334,16 @@ fn open_state() -> AppState {
         },
         #[cfg(test)]
         test_identities: Arc::new(HashMap::new()),
+    }
+}
+
+fn open_state() -> AppState {
+    let wanted = PathBuf::from(env::var("DATA_DIR").unwrap_or_else(|_| "/data".into()));
+    if fs::create_dir_all(wanted.join("objects")).is_ok() {
+        open_state_at(wanted)
+    } else {
+        warn!("DATA_DIR unavailable; using ./data");
+        open_state_at(PathBuf::from("data"))
     }
 }
 
@@ -588,15 +593,46 @@ async fn health() -> Json<Health> {
     })
 }
 async fn ready(State(state): State<AppState>) -> Response {
-    if state.data_dir.join("intake-desk.sqlite3").exists() {
-        Json(json!({"status":"ready","build_sha":build_sha()})).into_response()
-    } else {
-        fail(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "not_ready",
-            "Storage is not ready.",
-            "retry",
-        )
+    let result = (|| -> Result<(), String> {
+        if !state.database_path.is_file() {
+            return Err("active database file is unavailable".into());
+        }
+        if !state.data_dir.join("objects").is_dir() {
+            return Err("evidence directory is unavailable".into());
+        }
+        let object_probe = state
+            .data_dir
+            .join("objects")
+            .join(format!(".ready-{}", Uuid::new_v4()));
+        let probe = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&object_probe)
+            .map_err(|error| error.to_string())?;
+        probe.sync_all().map_err(|error| error.to_string())?;
+        drop(probe);
+        fs::remove_file(&object_probe).map_err(|error| error.to_string())?;
+        let db = state
+            .db
+            .lock()
+            .map_err(|_| "database lock is unavailable".to_owned())?;
+        db.query_row("SELECT 1", [], |row| row.get::<_, i64>(0))
+            .map_err(|error| error.to_string())?;
+        db.execute_batch("BEGIN IMMEDIATE; ROLLBACK;")
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => Json(json!({"status":"ready","build_sha":build_sha()})).into_response(),
+        Err(error) => {
+            warn!(reason = %error, "readiness check failed");
+            fail(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "not_ready",
+                "Storage is not ready.",
+                "retry",
+            )
+        }
     }
 }
 async fn me(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -1315,7 +1351,16 @@ async fn policy(request: Request<Body>, next: Next) -> Response {
     response
 }
 pub fn app(static_dir: impl AsRef<Path>) -> Router {
-    let state = open_state();
+    app_with_state(static_dir, open_state())
+}
+
+/// Builds the service with an isolated durable directory for integration tests.
+/// Production startup continues to select `/data` (or its documented fallback).
+pub fn app_with_data_dir(static_dir: impl AsRef<Path>, data_dir: impl AsRef<Path>) -> Router {
+    app_with_state(static_dir, open_state_at(data_dir.as_ref().to_path_buf()))
+}
+
+fn app_with_state(static_dir: impl AsRef<Path>, state: AppState) -> Router {
     let directory = PathBuf::from(static_dir.as_ref());
     let files =
         ServeDir::new(directory.clone()).fallback(ServeFile::new(directory.join("index.html")));
@@ -1383,10 +1428,6 @@ mod tests {
     }
 
     fn test_state_at(directory: PathBuf, identities: &[(&str, &str)]) -> AppState {
-        fs::create_dir_all(directory.join("objects")).expect("test data directory");
-        let db = Connection::open(directory.join("intake-desk.sqlite3")).expect("test database");
-        configure_sqlite(&db).expect("test WAL");
-        create_schema(&db).expect("test schema");
         let test_identities = identities
             .iter()
             .map(|(token, oid)| {
@@ -1400,15 +1441,9 @@ mod tests {
                 )
             })
             .collect();
-        AppState {
-            db: Arc::new(Mutex::new(db)),
-            data_dir: directory,
-            auth: AuthVerifier {
-                client: reqwest::Client::new(),
-                cache: Arc::new(RwLock::new(None)),
-            },
-            test_identities: Arc::new(test_identities),
-        }
+        let mut state = open_state_at(directory);
+        state.test_identities = Arc::new(test_identities);
+        state
     }
 
     fn auth(token: &str) -> HeaderMap {
@@ -1798,8 +1833,7 @@ mod tests {
             [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
         );
 
-        let reopened =
-            Connection::open(state.data_dir.join("intake-desk.sqlite3")).expect("reopen database");
+        let reopened = open_network_sqlite(&state.database_path).expect("reopen database");
         let persisted: String = reopened
             .query_row(
                 "SELECT payload FROM receipts_scoped WHERE id='receipt-audit'",

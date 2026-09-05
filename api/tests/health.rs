@@ -3,7 +3,8 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
-use intake_desk_api::app;
+use intake_desk_api::{app, app_with_data_dir};
+use rusqlite::Connection;
 use serde_json::Value;
 use tower::ServiceExt;
 
@@ -168,4 +169,89 @@ async fn unauthenticated_api_response_names_bearer_auth_and_is_not_cacheable() {
         response.headers()["cache-control"],
         "no-cache, no-store, must-revalidate"
     );
+}
+
+#[tokio::test]
+async fn fresh_isolated_volume_becomes_ready_and_stays_ready_after_reopen() {
+    let root = std::env::temp_dir().join(format!(
+        "intake-desk-fresh-volume-{}-{}",
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ));
+    let static_dir = root.join("static");
+    let data_dir = root.join("data");
+    std::fs::create_dir_all(&static_dir).expect("create static directory");
+    std::fs::write(
+        static_dir.join("index.html"),
+        "<!doctype html><main>app</main>",
+    )
+    .expect("write static fixture");
+
+    let first = app_with_data_dir(&static_dir, &data_dir);
+    let ready = first
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/ready")
+                .body(Body::empty())
+                .expect("ready request"),
+        )
+        .await
+        .expect("fresh readiness response");
+    assert_eq!(ready.status(), StatusCode::OK);
+    let ready_body = ready
+        .into_body()
+        .collect()
+        .await
+        .expect("fresh readiness body")
+        .to_bytes();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&ready_body).expect("fresh readiness JSON")["status"],
+        "ready"
+    );
+    assert!(data_dir.join("intake-desk-rollback.sqlite3").is_file());
+    assert!(data_dir.join("objects").is_dir());
+
+    let hidden_objects = data_dir.join("objects-hidden");
+    std::fs::rename(data_dir.join("objects"), &hidden_objects).expect("hide evidence directory");
+    let missing_objects = first
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/ready")
+                .body(Body::empty())
+                .expect("missing objects request"),
+        )
+        .await
+        .expect("missing objects response");
+    assert_eq!(missing_objects.status(), StatusCode::SERVICE_UNAVAILABLE);
+    std::fs::rename(&hidden_objects, data_dir.join("objects")).expect("restore evidence directory");
+    drop(first);
+
+    let database_path = data_dir.join("intake-desk-rollback.sqlite3");
+    let db = Connection::open(&database_path).expect("open durable database");
+    db.execute_batch(
+        "CREATE TABLE restart_proof(value TEXT); INSERT INTO restart_proof VALUES('kept');",
+    )
+    .expect("write restart proof");
+    drop(db);
+
+    let restarted = app_with_data_dir(&static_dir, &data_dir);
+    let ready_after_restart = restarted
+        .oneshot(
+            Request::builder()
+                .uri("/ready")
+                .body(Body::empty())
+                .expect("restart readiness request"),
+        )
+        .await
+        .expect("restart readiness response");
+    assert_eq!(ready_after_restart.status(), StatusCode::OK);
+    let reopened = Connection::open(&database_path).expect("reopen durable database");
+    let value: String = reopened
+        .query_row("SELECT value FROM restart_proof", [], |row| row.get(0))
+        .expect("read restart proof");
+    assert_eq!(value, "kept");
+    drop(reopened);
+    std::fs::remove_dir_all(root).expect("remove isolated volume");
 }
