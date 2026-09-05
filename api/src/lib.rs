@@ -787,7 +787,7 @@ async fn finalize(
         .and_then(|events| events.last())
         .and_then(|event| event["summary"].as_str())
         .unwrap_or("Receipt finalized.");
-    let event_id = format!("event-{sequence}");
+    let event_id = format!("{id}:event-{sequence}");
     let event_payload = json!({"actor":actor,"summary":summary});
     let event_hash = audit_hash(
         &event_id,
@@ -1144,7 +1144,7 @@ async fn add_correction(
         .unwrap_or(Value::Null);
     let actor = receipt_payload["receivedBy"].as_str().unwrap_or(&user.name);
     let summary = format!("Correction recorded: {reason}");
-    let event_id = format!("event-{sequence}");
+    let event_id = format!("{id}:event-{sequence}");
     let payload = json!({"reason":reason,"actor":actor,"summary":summary});
     let event_hash = audit_hash(
         &event_id,
@@ -1415,6 +1415,7 @@ mod tests {
         assert!(allowed_site(&db, &alex, &blair_site).is_err());
     }
 
+    /// @claim:server-tenant-isolation
     #[tokio::test]
     async fn claim_server_tenant_isolation_same_ids_never_overwrite() {
         let state = test_state(
@@ -1509,6 +1510,7 @@ mod tests {
         fs::remove_dir_all(&state.data_dir).expect("remove test data");
     }
 
+    /// @claim:entitlement-read-only
     #[tokio::test]
     async fn claim_entitlement_makes_writes_read_only_but_keeps_reads() {
         let state = test_state("entitlement", &[("token", "reader")]);
@@ -1601,6 +1603,7 @@ mod tests {
         fs::remove_dir_all(&state.data_dir).expect("remove test data");
     }
 
+    /// @claim:server-audit-retention
     #[tokio::test]
     async fn claim_server_audit_uses_request_time_and_persists_after_reopen() {
         let state = test_state("audit-time", &[("token", "auditor")]);
@@ -1729,6 +1732,7 @@ mod tests {
         fs::remove_dir_all(&state.data_dir).expect("remove test data");
     }
 
+    /// @claim:server-record-reload
     #[tokio::test]
     async fn claim_server_records_reload_after_process_reopen() {
         let state = test_state(
