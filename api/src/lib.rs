@@ -17,7 +17,7 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{SecondsFormat, Utc};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, Error as SqliteError, ErrorCode, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -277,6 +277,85 @@ fn configure_sqlite(db: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+fn database_is_busy(error: &SqliteError) -> bool {
+    matches!(
+        error,
+        SqliteError::SqliteFailure(code, _)
+            if matches!(code.code, ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
+    )
+}
+
+fn recover_network_wal(source_path: &Path, destination_path: &Path) -> Result<(), String> {
+    let recovery_dir = env::temp_dir().join(format!("intake-desk-recovery-{}", Uuid::new_v4()));
+    fs::create_dir_all(&recovery_dir).map_err(|error| error.to_string())?;
+    let local_path = recovery_dir.join("intake-desk.sqlite3");
+    fs::copy(source_path, &local_path).map_err(|error| error.to_string())?;
+    for suffix in ["-wal", "-shm"] {
+        let source_sidecar = PathBuf::from(format!("{}{}", source_path.display(), suffix));
+        if source_sidecar.exists() {
+            let local_sidecar = PathBuf::from(format!("{}{}", local_path.display(), suffix));
+            fs::copy(source_sidecar, local_sidecar).map_err(|error| error.to_string())?;
+        }
+    }
+
+    let source = Connection::open(&local_path).map_err(|error| error.to_string())?;
+    source
+        .busy_timeout(Duration::from_secs(30))
+        .map_err(|error| error.to_string())?;
+    source
+        .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+        .map_err(|error| error.to_string())?;
+
+    let pending = destination_path.with_extension("pending.sqlite3");
+    match fs::remove_file(&pending) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    let mut destination = Connection::open(&pending).map_err(|error| error.to_string())?;
+    configure_sqlite(&destination).map_err(|error| error.to_string())?;
+    {
+        let backup = rusqlite::backup::Backup::new(&source, &mut destination)
+            .map_err(|error| error.to_string())?;
+        backup
+            .run_to_completion(16, Duration::from_millis(20), None)
+            .map_err(|error| error.to_string())?;
+    }
+    destination
+        .pragma_update(None, "journal_mode", "DELETE")
+        .map_err(|error| error.to_string())?;
+    drop(destination);
+    fs::rename(&pending, destination_path).map_err(|error| error.to_string())?;
+    drop(source);
+    fs::remove_dir_all(recovery_dir).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn open_persistent_database(directory: &Path) -> Result<Connection, String> {
+    let legacy_path = directory.join("intake-desk.sqlite3");
+    let rollback_path = directory.join("intake-desk-rollback.sqlite3");
+    let selected_path = if rollback_path.exists() {
+        rollback_path.clone()
+    } else {
+        legacy_path.clone()
+    };
+    let db = Connection::open(&selected_path).map_err(|error| error.to_string())?;
+    configure_sqlite(&db).map_err(|error| error.to_string())?;
+    match create_schema(&db) {
+        Ok(()) => Ok(db),
+        Err(error) if selected_path == legacy_path && database_is_busy(&error) => {
+            drop(db);
+            recover_network_wal(&legacy_path, &rollback_path)?;
+            let recovered = Connection::open(&rollback_path).map_err(|error| error.to_string())?;
+            configure_sqlite(&recovered).map_err(|error| error.to_string())?;
+            create_schema(&recovered).map_err(|error| error.to_string())?;
+            warn!("recovered legacy WAL database into network-safe rollback journal");
+            Ok(recovered)
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 fn open_state() -> AppState {
     let wanted = PathBuf::from(env::var("DATA_DIR").unwrap_or_else(|_| "/data".into()));
     let directory = if fs::create_dir_all(wanted.join("objects")).is_ok() {
@@ -287,9 +366,7 @@ fn open_state() -> AppState {
         fs::create_dir_all(fallback.join("objects")).expect("create data directory");
         fallback
     };
-    let db = Connection::open(directory.join("intake-desk.sqlite3")).expect("open database");
-    configure_sqlite(&db).expect("configure database");
-    create_schema(&db).expect("create schema");
+    let db = open_persistent_database(&directory).expect("open persistent database");
     AppState {
         db: Arc::new(Mutex::new(db)),
         data_dir: directory,
@@ -1406,7 +1483,7 @@ mod tests {
     }
 
     #[test]
-    fn database_configuration_does_not_require_a_journal_mode_write_lock() {
+    fn network_wal_recovery_preserves_committed_records() {
         let directory = env::temp_dir().join(format!(
             "intake-desk-wal-reopen-{}-{}",
             std::process::id(),
@@ -1417,11 +1494,19 @@ mod tests {
         let first = Connection::open(&path).expect("first database connection");
         configure_sqlite(&first).expect("initial database configuration");
         first
-            .execute_batch("CREATE TABLE held(value TEXT); BEGIN IMMEDIATE; INSERT INTO held VALUES('old revision');")
-            .expect("held write transaction");
+            .pragma_update(None, "journal_mode", "WAL")
+            .expect("test WAL mode");
+        first
+            .execute_batch("CREATE TABLE held(value TEXT); INSERT INTO held VALUES('committed record'); BEGIN IMMEDIATE;")
+            .expect("committed record and held write transaction");
 
-        let replacement = Connection::open(&path).expect("replacement database connection");
-        configure_sqlite(&replacement).expect("configure without a journal mode write lock");
+        let recovered_path = directory.join("intake-desk-rollback.sqlite3");
+        recover_network_wal(&path, &recovered_path).expect("recover WAL database");
+        let recovered = Connection::open(&recovered_path).expect("recovered database connection");
+        let value: String = recovered
+            .query_row("SELECT value FROM held", [], |row| row.get(0))
+            .expect("retained committed record");
+        assert_eq!(value, "committed record");
 
         first.execute_batch("ROLLBACK").expect("release test lock");
         fs::remove_dir_all(directory).expect("remove test database");
