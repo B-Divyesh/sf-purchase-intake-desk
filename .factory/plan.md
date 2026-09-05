@@ -1,6 +1,6 @@
 # Intake Desk venture plan
 
-Status: **M1 BUILT — awaiting independent review and polish**
+Status: **M1 PASS; M2 CORE REPAIRED — external identity and billing checks remain**
 
 Product: `purchase-intake-desk` · Artifact: `web-with-backend`
 
@@ -632,7 +632,7 @@ Definition of done:
 
 ### M2 — Sign in, pay, and use a real site
 
-Status: **PLANNED — M1 passed; not started**
+Status: **CORE BUILT AND REPAIRED — external identity and billing checks remain**
 
 Goal: An owner can sign in, attach an active Dock subscription, create one site,
 and repeat the M1 job against durable tenant-isolated records.

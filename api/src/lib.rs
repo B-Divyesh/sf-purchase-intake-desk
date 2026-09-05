@@ -1032,7 +1032,14 @@ async fn add_member(
             "ask_owner",
         );
     };
-    db.execute("INSERT INTO memberships(tenant_id,oid,role) VALUES(?1,?2,?3) ON CONFLICT(tenant_id,oid) DO UPDATE SET role=excluded.role",params![tenant,member.oid,member.role]).ok();
+    if db.execute("INSERT INTO memberships(tenant_id,oid,role) VALUES(?1,?2,?3) ON CONFLICT(tenant_id,oid) DO UPDATE SET role=excluded.role",params![tenant,member.oid,member.role]).is_err() {
+        return fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "storage_error",
+            "The staff member could not be saved.",
+            "retry",
+        );
+    }
     Json(json!({"status":"added"})).into_response()
 }
 
