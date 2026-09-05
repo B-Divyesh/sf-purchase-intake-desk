@@ -17,7 +17,7 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{SecondsFormat, Utc};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
-use rusqlite::{params, Connection, Error as SqliteError, ErrorCode, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -277,83 +277,41 @@ fn configure_sqlite(db: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn database_is_busy(error: &SqliteError) -> bool {
-    matches!(
-        error,
-        SqliteError::SqliteFailure(code, _)
-            if matches!(code.code, ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
-    )
-}
-
-fn recover_network_wal(source_path: &Path, destination_path: &Path) -> Result<(), String> {
-    let recovery_dir = env::temp_dir().join(format!("intake-desk-recovery-{}", Uuid::new_v4()));
-    fs::create_dir_all(&recovery_dir).map_err(|error| error.to_string())?;
-    let local_path = recovery_dir.join("intake-desk.sqlite3");
-    fs::copy(source_path, &local_path).map_err(|error| error.to_string())?;
-    for suffix in ["-wal", "-shm"] {
-        let source_sidecar = PathBuf::from(format!("{}{}", source_path.display(), suffix));
-        if source_sidecar.exists() {
-            let local_sidecar = PathBuf::from(format!("{}{}", local_path.display(), suffix));
-            fs::copy(source_sidecar, local_sidecar).map_err(|error| error.to_string())?;
-        }
+fn seed_network_safe_database(directory: &Path, destination_path: &Path) -> Result<(), String> {
+    let backup_path = directory.join("backup-latest.sqlite3");
+    let pending = directory.join(format!(
+        "intake-desk-rollback-pending-{}.sqlite3",
+        Uuid::new_v4()
+    ));
+    if backup_path.exists() {
+        fs::copy(&backup_path, &pending).map_err(|error| error.to_string())?;
+        warn!("seeding network-safe database from the latest consistent backup");
     }
-
-    let source = Connection::open(&local_path).map_err(|error| error.to_string())?;
-    source
-        .busy_timeout(Duration::from_secs(30))
-        .map_err(|error| error.to_string())?;
-    source
-        .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
-        .map_err(|error| error.to_string())?;
-
-    let pending = destination_path.with_extension("pending.sqlite3");
-    match fs::remove_file(&pending) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error.to_string()),
-    }
-    let mut destination = Connection::open(&pending).map_err(|error| error.to_string())?;
+    let destination = Connection::open(&pending).map_err(|error| error.to_string())?;
     configure_sqlite(&destination).map_err(|error| error.to_string())?;
-    {
-        let backup = rusqlite::backup::Backup::new(&source, &mut destination)
-            .map_err(|error| error.to_string())?;
-        backup
-            .run_to_completion(16, Duration::from_millis(20), None)
-            .map_err(|error| error.to_string())?;
+    let integrity: String = destination
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    if integrity != "ok" {
+        return Err(format!("backup integrity check failed: {integrity}"));
     }
     destination
         .pragma_update(None, "journal_mode", "DELETE")
         .map_err(|error| error.to_string())?;
     drop(destination);
     fs::rename(&pending, destination_path).map_err(|error| error.to_string())?;
-    drop(source);
-    fs::remove_dir_all(recovery_dir).map_err(|error| error.to_string())?;
     Ok(())
 }
 
 fn open_persistent_database(directory: &Path) -> Result<Connection, String> {
-    let legacy_path = directory.join("intake-desk.sqlite3");
     let rollback_path = directory.join("intake-desk-rollback.sqlite3");
-    let selected_path = if rollback_path.exists() {
-        rollback_path.clone()
-    } else {
-        legacy_path.clone()
-    };
-    let db = Connection::open(&selected_path).map_err(|error| error.to_string())?;
-    configure_sqlite(&db).map_err(|error| error.to_string())?;
-    match create_schema(&db) {
-        Ok(()) => Ok(db),
-        Err(error) if selected_path == legacy_path && database_is_busy(&error) => {
-            drop(db);
-            recover_network_wal(&legacy_path, &rollback_path)?;
-            let recovered = Connection::open(&rollback_path).map_err(|error| error.to_string())?;
-            configure_sqlite(&recovered).map_err(|error| error.to_string())?;
-            create_schema(&recovered).map_err(|error| error.to_string())?;
-            warn!("recovered legacy WAL database into network-safe rollback journal");
-            Ok(recovered)
-        }
-        Err(error) => Err(error.to_string()),
+    if !rollback_path.exists() {
+        seed_network_safe_database(directory, &rollback_path)?;
     }
+    let db = Connection::open(&rollback_path).map_err(|error| error.to_string())?;
+    configure_sqlite(&db).map_err(|error| error.to_string())?;
+    create_schema(&db).map_err(|error| error.to_string())?;
+    Ok(db)
 }
 
 fn open_state() -> AppState {
@@ -1483,7 +1441,7 @@ mod tests {
     }
 
     #[test]
-    fn network_wal_recovery_preserves_committed_records() {
+    fn rollback_database_starts_from_consistent_backup_without_touching_locked_wal() {
         let directory = env::temp_dir().join(format!(
             "intake-desk-wal-reopen-{}-{}",
             std::process::id(),
@@ -1497,16 +1455,24 @@ mod tests {
             .pragma_update(None, "journal_mode", "WAL")
             .expect("test WAL mode");
         first
-            .execute_batch("CREATE TABLE held(value TEXT); INSERT INTO held VALUES('committed record'); BEGIN IMMEDIATE;")
-            .expect("committed record and held write transaction");
+            .execute_batch(
+                "CREATE TABLE held(value TEXT); INSERT INTO held VALUES('committed record');",
+            )
+            .expect("committed record");
+        write_backup(&first, &directory).expect("consistent backup");
+        first
+            .execute_batch("BEGIN IMMEDIATE;")
+            .expect("held WAL lock");
 
-        let recovered_path = directory.join("intake-desk-rollback.sqlite3");
-        recover_network_wal(&path, &recovered_path).expect("recover WAL database");
-        let recovered = Connection::open(&recovered_path).expect("recovered database connection");
+        let recovered = open_persistent_database(&directory).expect("open backup-seeded database");
         let value: String = recovered
             .query_row("SELECT value FROM held", [], |row| row.get(0))
             .expect("retained committed record");
         assert_eq!(value, "committed record");
+        assert!(
+            path.exists(),
+            "the locked legacy database remains untouched"
+        );
 
         first.execute_batch("ROLLBACK").expect("release test lock");
         fs::remove_dir_all(directory).expect("remove test database");
